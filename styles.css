@@ -3451,3 +3451,86 @@ button:disabled {
 .section-head h2:first-child {
   margin-top: 0;
 }
+
+#view-timer .section-head {
+  margin-bottom: 22px;
+}
+
+/* Keep the two compact dashboard progress cards visually equal. */
+.dashboard-main .exercise-preview,
+.dashboard-main .habit-preview {
+  min-height: 112px;
+  height: 100%;
+  align-self: stretch;
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr;
+  align-content: start;
+  align-items: start;
+  row-gap: 8px;
+  padding: 14px 16px;
+}
+
+.dashboard-main .exercise-preview > span:first-child,
+.dashboard-main .habit-preview > span:first-child {
+  grid-row: 1;
+  align-self: start;
+  min-height: 24px;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.dashboard-main .habit-preview {
+  padding-right: 76px;
+}
+
+.dashboard-main .exercise-preview > span:first-child::before {
+  background: #c98551;
+}
+
+.dashboard-main .exercise-preview #dashboardExercisePreview {
+  grid-row: 2;
+  color: #8f7770;
+  font-size: 1rem;
+  font-weight: 760;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.dashboard-main .exercise-preview #dashboardExerciseMeta,
+.dashboard-main .habit-preview #habitProgressText {
+  grid-row: 3;
+}
+
+.dashboard-main .exercise-preview #dashboardExerciseMeta,
+.dashboard-main .habit-preview #habitProgressText {
+  color: #9c8179;
+  font-size: 0.92rem;
+  line-height: 1.35;
+}
+
+.dashboard-main .habit-preview .ring {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+/* Align every dashboard card title and accent mark to the same visual rail. */
+.dashboard-main .dashboard-preview {
+  padding: 14px 16px;
+}
+
+.dashboard-main .dashboard-preview > span:first-child {
+  min-height: 24px;
+  margin: 0;
+  line-height: 1.2;
+  align-items: center;
+}
+
+.dashboard-main .dashboard-preview > span:first-child::before {
+  flex: 0 0 4px;
+  margin: 0;
+}
