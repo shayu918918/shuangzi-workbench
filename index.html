@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#fff8ef">
+  <meta name="application-name" content="工作台">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="工作台">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <title>个人工作台</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow" id="todayLabel">今日</p>
+        <h1>工作台</h1>
+      </div>
+    </header>
+
+    <main>
+      <section class="section active" id="view-home" aria-labelledby="homeTitle">
+        <div class="dashboard-card">
+          <h2 class="sr-only" id="homeTitle">今日仪表盘</h2>
+          <div class="dashboard-main" aria-label="今日重点">
+            <article class="dashboard-preview schedule-preview dashboard-link" role="button" tabindex="0" aria-label="进入课表" data-dashboard-jump="schedule">
+              <span>今日课表</span>
+              <div class="dashboard-mini-list" id="dashboardSchedulePreview"></div>
+              <small id="dashboardScheduleMeta"></small>
+            </article>
+            <article class="dashboard-preview task-preview">
+              <span>今日清单</span>
+              <div class="dashboard-mini-list" id="dashboardTaskPreview"></div>
+              <small id="dashboardTaskMeta">暂无待办</small>
+            </article>
+            <article class="dashboard-preview exercise-preview dashboard-link" role="button" tabindex="0" aria-label="进入运动计时" data-dashboard-jump="exercise">
+              <span>今日运动</span>
+              <strong id="dashboardExercisePreview">0/30 分钟</strong>
+              <small id="dashboardExerciseMeta">还差 30 分钟</small>
+            </article>
+            <article class="dashboard-preview habit-preview dashboard-link" role="button" tabindex="0" aria-label="查看打卡进度" data-dashboard-jump="habits">
+              <span>打卡进度</span>
+              <div class="ring habit-ring" id="habitRing"><span id="habitRingCount">0</span></div>
+              <small id="habitProgressText">打卡 0/0</small>
+            </article>
+          </div>
+        </div>
+
+        <div class="home-module" data-home-module="schedule">
+          <div class="subhead">
+            <h3>本周课表</h3>
+            <span id="todayScheduleCount">0 节</span>
+          </div>
+          <div class="schedule-stack" id="todayScheduleList"></div>
+        </div>
+
+        <div class="home-module" id="homeHabitsModule" data-home-module="habits">
+          <div class="subhead">
+            <h3>打卡进度</h3>
+            <span id="habitDoneCount">0/0</span>
+          </div>
+          <div class="habit-progress">
+            <span id="habitProgressBar"></span>
+          </div>
+          <div class="habit-grid" id="habitList" aria-live="polite"></div>
+        </div>
+
+        <div class="home-module" data-home-module="tasks">
+          <div class="subhead">
+            <h3>今日清单</h3>
+            <span id="todayTaskCount">0 项</span>
+          </div>
+          <form class="quick-form" id="quickTaskForm">
+            <label class="sr-only" for="quickTaskInput">一键记录清单</label>
+            <input id="quickTaskInput" type="text" autocomplete="off" placeholder="例如：明天上午9点读论文；每周三下午3点上课">
+            <button class="primary-button" type="submit">加入</button>
+          </form>
+
+          <div class="toast" id="taskToast" role="status" aria-live="polite"></div>
+          <div class="list-stack" id="todayList" aria-live="polite"></div>
+        </div>
+
+        <details class="manage-block">
+          <summary>全部清单 <span id="allTaskCount">0 项</span></summary>
+          <div class="list-stack" id="allTaskList"></div>
+        </details>
+
+        <details class="manage-block">
+          <summary>管理打卡内容</summary>
+          <form class="panel-form inner-form" id="habitForm">
+            <div class="inline-fields">
+              <input id="habitTitle" type="text" placeholder="例如：阅读、写作、运动、喝水">
+              <select id="habitAccent">
+                <option value="green">绿色</option>
+                <option value="blue">蓝色</option>
+                <option value="peach">橙色</option>
+                <option value="purple">紫色</option>
+              </select>
+            </div>
+            <button class="secondary-button" type="submit">添加打卡</button>
+          </form>
+          <div class="list-stack" id="habitManageList"></div>
+        </details>
+
+      </section>
+
+      <section class="section" id="view-timer" aria-labelledby="timerTitle">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">时间</p>
+            <h2 id="timerTitle">专注与运动</h2>
+          </div>
+        </div>
+
+        <div class="segmented" role="tablist" aria-label="计时模式">
+          <button class="segment active" id="focusTab" type="button" role="tab" aria-selected="true">专注</button>
+          <button class="segment" id="exerciseTab" type="button" role="tab" aria-selected="false">运动</button>
+        </div>
+
+        <div class="timer-panel active" id="focusPanel">
+          <div class="big-clock" id="focusClock">25:00</div>
+          <div class="inline-fields">
+            <label>
+              分钟
+              <input id="focusMinutes" type="number" min="1" max="180" value="25">
+            </label>
+            <label>
+              绑定清单
+              <select id="focusTaskSelect">
+                <option value="">不绑定</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            专注名称
+            <input id="focusTitle" type="text" placeholder="阅读 / 写作 / 备课">
+          </label>
+          <div class="timer-note" id="focusTimerNote" role="status" aria-live="polite"></div>
+          <div class="button-row">
+            <button class="primary-button" id="focusStart" type="button">开始</button>
+            <button class="secondary-button" id="focusPause" type="button">暂停</button>
+            <button class="secondary-button" id="focusReset" type="button">重置</button>
+          </div>
+        </div>
+
+        <div class="timer-panel" id="exercisePanel">
+          <div class="exercise-stage" id="exerciseStage">准备</div>
+          <div class="big-clock" id="exerciseClock">00:10</div>
+          <div class="exercise-grid">
+            <label>准备<input id="warmupSeconds" type="number" min="1" max="300" value="10"></label>
+            <label>左边<input id="leftSeconds" type="number" min="1" max="900" value="40"></label>
+            <label>换边<input id="switchSeconds" type="number" min="1" max="300" value="10"></label>
+            <label>右边<input id="rightSeconds" type="number" min="1" max="900" value="40"></label>
+            <label>休息<input id="restSeconds" type="number" min="1" max="900" value="30"></label>
+            <label>循环<input id="exerciseRounds" type="number" min="1" max="20" value="3"></label>
+          </div>
+          <div class="timer-note" id="exerciseTimerNote" role="status" aria-live="polite"></div>
+          <div class="button-row">
+            <button class="primary-button" id="exerciseStart" type="button">开始</button>
+            <button class="secondary-button" id="exercisePause" type="button">暂停</button>
+            <button class="secondary-button" id="exerciseReset" type="button">重置</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="view-schedule" aria-labelledby="scheduleTitlePage">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">课程</p>
+            <h2 id="scheduleTitlePage">循环课表</h2>
+          </div>
+        </div>
+
+        <form class="panel-form" id="scheduleForm">
+          <h3>添加课程</h3>
+          <div class="inline-fields">
+            <select id="scheduleDay">
+              <option value="1">周一</option>
+              <option value="2">周二</option>
+              <option value="3">周三</option>
+              <option value="4">周四</option>
+              <option value="5">周五</option>
+              <option value="6">周六</option>
+              <option value="0">周日</option>
+            </select>
+            <input id="scheduleTime" type="time" value="08:00">
+          </div>
+          <input id="scheduleTitle" type="text" placeholder="课程名称 / 教室">
+          <button class="primary-button" type="submit">添加课程</button>
+        </form>
+
+        <div class="subhead">
+          <h3>全部课表</h3>
+          <span id="scheduleCount">0 项</span>
+        </div>
+        <div class="list-stack" id="scheduleList"></div>
+      </section>
+
+      <section class="section" id="view-stats" aria-labelledby="statsTitle">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">回看</p>
+            <h2 id="statsTitle">时间统计</h2>
+          </div>
+        </div>
+
+        <div class="stats-filter">
+          <label>
+            时间范围
+            <select id="statsRange">
+              <option value="7">近 7 天</option>
+              <option value="30">近 30 天</option>
+              <option value="month">本月</option>
+              <option value="custom">自定义</option>
+            </select>
+          </label>
+          <div class="inline-fields custom-range" id="customRangeFields">
+            <label>
+              开始
+              <input id="statsStart" type="date">
+            </label>
+            <label>
+              结束
+              <input id="statsEnd" type="date">
+            </label>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span>运动</span>
+            <strong id="statsExercise">0 分钟</strong>
+          </div>
+          <div class="stat-card">
+            <span>专注</span>
+            <strong id="statsFocus">0 分钟</strong>
+          </div>
+          <div class="stat-card">
+            <span>完成</span>
+            <strong id="statsDone">0 项</strong>
+          </div>
+          <div class="stat-card">
+            <span>打卡率</span>
+            <strong id="statsHabitRate">0%</strong>
+          </div>
+        </div>
+
+        <div class="subhead">
+          <h3>趋势</h3>
+          <span id="trendRangeLabel">0 天</span>
+        </div>
+        <div class="trend-card">
+          <svg id="statsTrendChart" viewBox="0 0 360 150" role="img" aria-label="运动、专注和完成事项趋势"></svg>
+        </div>
+
+        <div class="subhead">
+          <h3>每日汇总</h3>
+          <span id="dailySummaryCount">0 天</span>
+        </div>
+        <div class="daily-list" id="dailySummaryList"></div>
+
+        <div class="subhead">
+          <h3>完成事项</h3>
+          <span id="completedTaskCount">0 项</span>
+        </div>
+        <div class="list-stack" id="completedTaskList"></div>
+
+        <div class="subhead">
+          <h3>时间记录</h3>
+          <span id="timeSessionCount">0 条</span>
+        </div>
+        <div class="list-stack" id="timeSessionList"></div>
+      </section>
+
+      <section class="section" id="view-settings" aria-labelledby="settingsTitle">
+        <div class="section-head">
+          <div>
+            <p class="section-kicker">设置</p>
+            <h2 id="settingsTitle">应用设置</h2>
+          </div>
+        </div>
+
+        <form class="panel-form" id="appSettingsForm">
+          <h3>显示与声音</h3>
+          <div class="inline-fields">
+            <label>
+              字号
+              <select id="fontScale">
+                <option value="normal">标准</option>
+                <option value="large">偏大</option>
+                <option value="small">偏小</option>
+              </select>
+            </label>
+            <label>
+              健身提示音
+              <select id="soundMode">
+                <option value="strong">明显</option>
+                <option value="soft">柔和</option>
+                <option value="silent">关闭</option>
+              </select>
+            </label>
+          </div>
+          <label>
+            打卡成功音
+            <select id="interactionSound">
+              <option value="soft">柔和</option>
+              <option value="bright">清脆</option>
+              <option value="silent">关闭</option>
+            </select>
+          </label>
+          <label>
+            每日运动目标
+            <input id="exerciseGoalMinutes" type="number" min="5" max="180" step="5" value="30">
+          </label>
+          <label>
+            首页顺序
+            <select id="homeOrder">
+              <option value="schedule-tasks-habits">课表 · 清单 · 打卡</option>
+              <option value="habits-tasks-schedule">打卡 · 清单 · 课表</option>
+              <option value="tasks-schedule-habits">清单 · 课表 · 打卡</option>
+            </select>
+          </label>
+          <fieldset class="settings-checks">
+            <legend>首页显示</legend>
+            <label><input id="showHomeSchedule" type="checkbox" value="schedule"> 本周课表</label>
+            <label><input id="showHomeTasks" type="checkbox" value="tasks"> 今日清单</label>
+            <label><input id="showHomeHabits" type="checkbox" value="habits"> 打卡进度</label>
+          </fieldset>
+          <button class="primary-button" type="submit">保存设置</button>
+        </form>
+
+        <div class="panel-form">
+          <h3>应用体验</h3>
+          <div class="button-row">
+            <button class="secondary-button" id="installAppButton" type="button">添加到桌面</button>
+            <button class="secondary-button" id="refreshAppButton" type="button">刷新应用缓存</button>
+          </div>
+        </div>
+
+        <details class="panel-form settings-details">
+          <summary>数据迁移</summary>
+          <div class="button-row">
+            <button class="secondary-button" id="exportDailyButton" type="button">导出日报</button>
+            <button class="secondary-button" id="exportWeeklyButton" type="button">导出周报</button>
+            <button class="secondary-button" id="exportBackupButton" type="button">导出备份</button>
+            <label class="file-button">
+              导入备份
+              <input id="importBackupInput" type="file" accept="application/json">
+            </label>
+          </div>
+        </details>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="主导航">
+      <button class="nav-item active" type="button" data-view="home"><svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 10.8 12 4.6l7.5 6.2"/><path d="M6.6 10.2v8.5h10.8v-8.5"/><path d="M9.8 18.7v-5h4.4v5"/></svg>今日</button>
+      <button class="nav-item" type="button" data-view="timer"><svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7.2"/><path d="M12 13V8.8"/><path d="M12 13l3.3 2.1"/><path d="M9.2 3.8h5.6"/></svg>计时</button>
+      <button class="nav-item" type="button" data-view="schedule"><svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><rect x="5.2" y="4.8" width="13.6" height="14.4" rx="2.2"/><path d="M8.4 8.8h7.2"/><path d="M8.4 12.2h7.2"/><path d="M8.4 15.6h4.2"/></svg>课表</button>
+      <button class="nav-item" type="button" data-view="stats"><svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 18.5V12"/><path d="M12 18.5V7.5"/><path d="M17.5 18.5v-8"/><path d="M4.8 18.5h14.4"/></svg>统计</button>
+      <button class="nav-item" type="button" data-view="settings"><svg class="nav-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 4.6v2"/><path d="M12 17.4v2"/><path d="M4.6 12h2"/><path d="M17.4 12h2"/><path d="m6.8 6.8 1.4 1.4"/><path d="m15.8 15.8 1.4 1.4"/><path d="m17.2 6.8-1.4 1.4"/><path d="m8.2 15.8-1.4 1.4"/></svg>设置</button>
+    </nav>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
