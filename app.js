@@ -20,7 +20,6 @@ const pinnedHabits = [
 const state = loadState();
 seedPinnedHabits();
 const selectedTags = new Set(["生活"]);
-let focusTimer = createTimerState();
 let exerciseTimer = createTimerState();
 let exerciseSteps = [];
 let audioContext;
@@ -32,6 +31,7 @@ function createTimerState() {
   return {
     total: 0,
     remaining: 0,
+    elapsed: 0,
     running: false,
     interval: null,
     startedAt: null,
@@ -336,7 +336,6 @@ function parseTask(text) {
     category: classifyTask(originalText),
     repeat: parseRepeat(originalText),
     doneDates: [],
-    focusLogs: [],
     createdAt: new Date().toISOString()
   };
 }
@@ -424,7 +423,6 @@ function jumpFromDashboard(target) {
   if (target === "exercise") {
     setView("timer");
     history.replaceState(null, "", "#timer");
-    switchTimer("exercise");
     document.getElementById("view-timer")?.scrollIntoView({ block: "start" });
     return;
   }
@@ -573,13 +571,13 @@ function setupForms() {
   document.getElementById("exportDailyButton").addEventListener("click", () => {
     const today = todayISO();
     playUiSound("export");
-    downloadText(`个人工作台日报-${today}.md`, reportToMarkdown(today, today, "日报"));
+    downloadText(`双子工作台日报-${today}.md`, reportToMarkdown(today, today, "日报"));
   });
   document.getElementById("exportWeeklyButton").addEventListener("click", () => {
     const end = todayISO();
     const start = addDays(end, -6);
     playUiSound("export");
-    downloadText(`个人工作台周报-${start}_${end}.md`, reportToMarkdown(start, end, "周报"));
+    downloadText(`双子工作台周报-${start}_${end}.md`, reportToMarkdown(start, end, "周报"));
   });
   document.getElementById("exportBackupButton").addEventListener("click", () => {
     playUiSound("export");
@@ -649,27 +647,6 @@ function showTaskToast(message) {
 }
 
 function setupTimers() {
-  document.getElementById("focusTab").addEventListener("click", () => {
-    playUiSound("nav");
-    switchTimer("focus");
-  });
-  document.getElementById("exerciseTab").addEventListener("click", () => {
-    playUiSound("nav");
-    switchTimer("exercise");
-  });
-  document.getElementById("focusMinutes").addEventListener("input", resetFocus);
-  document.getElementById("focusStart").addEventListener("click", () => {
-    playUiSound("save");
-    startFocus();
-  });
-  document.getElementById("focusPause").addEventListener("click", () => {
-    playUiSound("toggle");
-    pauseFocus();
-  });
-  document.getElementById("focusReset").addEventListener("click", () => {
-    playUiSound("delete");
-    resetFocus();
-  });
   document.getElementById("exerciseStart").addEventListener("click", () => {
     playUiSound("save");
     startExercise();
@@ -685,7 +662,6 @@ function setupTimers() {
   ["warmupSeconds", "leftSeconds", "switchSeconds", "rightSeconds", "restSeconds", "exerciseRounds"].forEach((id) => {
     document.getElementById(id).addEventListener("input", resetExercise);
   });
-  resetFocus();
   resetExercise();
 }
 
@@ -719,16 +695,6 @@ function setupPWA() {
     }
     location.reload();
   });
-}
-
-function switchTimer(mode) {
-  const isFocus = mode === "focus";
-  document.getElementById("focusPanel").classList.toggle("active", isFocus);
-  document.getElementById("exercisePanel").classList.toggle("active", !isFocus);
-  document.getElementById("focusTab").classList.toggle("active", isFocus);
-  document.getElementById("exerciseTab").classList.toggle("active", !isFocus);
-  document.getElementById("focusTab").setAttribute("aria-selected", String(isFocus));
-  document.getElementById("exerciseTab").setAttribute("aria-selected", String(!isFocus));
 }
 
 function initAudio() {
@@ -811,65 +777,6 @@ function formatSeconds(seconds) {
   const minutes = Math.floor(seconds / 60);
   const rest = seconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
-}
-
-function resetFocus() {
-  clearInterval(focusTimer.interval);
-  const minutes = Math.max(1, Number(document.getElementById("focusMinutes").value || 25));
-  focusTimer = createTimerState();
-  focusTimer.total = minutes * 60;
-  focusTimer.remaining = focusTimer.total;
-  document.getElementById("focusClock").textContent = formatSeconds(focusTimer.remaining);
-}
-
-function startFocus() {
-  initAudio();
-  if (focusTimer.running) return;
-  setTimerNote("focusTimerNote", "");
-  focusTimer.running = true;
-  focusTimer.startedAt ||= new Date().toISOString();
-  focusTimer.interval = setInterval(() => {
-    focusTimer.remaining -= 1;
-    document.getElementById("focusClock").textContent = formatSeconds(Math.max(0, focusTimer.remaining));
-    if (focusTimer.remaining <= 0) {
-      clearInterval(focusTimer.interval);
-      focusTimer.running = false;
-      beep(880, 0.28);
-      const taskId = document.getElementById("focusTaskSelect").value;
-      const boundTask = state.tasks.find((task) => task.id === taskId);
-      const sessionId = uid("focus");
-      const minutes = Math.max(1, Math.round(focusTimer.total / 60));
-      const title = document.getElementById("focusTitle").value.trim() || boundTask?.title || "专注";
-      state.focusSessions.unshift({
-        id: sessionId,
-        title,
-        taskId: boundTask?.id || "",
-        seconds: focusTimer.total,
-        minutes,
-        createdAt: new Date().toISOString()
-      });
-      if (boundTask) {
-        boundTask.focusLogs ||= [];
-        boundTask.focusLogs.push({
-          id: sessionId,
-          date: todayISO(),
-          minutes,
-          createdAt: new Date().toISOString()
-        });
-      }
-      saveState();
-      renderHome();
-      renderFocusTaskOptions();
-      renderStats();
-      setTimerNote("focusTimerNote", boundTask ? `已为「${boundTask.title}」记录 ${minutes} 分钟专注。` : `已记录 ${minutes} 分钟专注。`);
-      resetFocus();
-    }
-  }, 1000);
-}
-
-function pauseFocus() {
-  clearInterval(focusTimer.interval);
-  focusTimer.running = false;
 }
 
 function buildExerciseSteps() {
@@ -1003,7 +910,6 @@ function renderAll() {
   renderHabits();
   renderNotes();
   renderSchedule();
-  renderFocusTaskOptions();
   renderStats();
 }
 
@@ -1041,7 +947,6 @@ function renderHome() {
   bindTaskButtons(todayList);
   bindTaskButtons(allTaskList);
   if (dashboardTaskList) bindTaskButtons(dashboardTaskList);
-  renderFocusTaskOptions();
 }
 
 function renderDashboardPreview(scheduleItems, taskItems, doneCount, taskTotal) {
@@ -1286,7 +1191,6 @@ function sortTasks(a, b) {
 function renderTaskItem(item, doneDate) {
   const isSchedule = item.schedule;
   const done = !isSchedule && isDoneOn(item, doneDate);
-  const focused = !isSchedule ? focusMinutesForTask(item, doneDate) : 0;
   return `
     <article class="item">
       <div class="item-row">
@@ -1297,7 +1201,6 @@ function renderTaskItem(item, doneDate) {
             <span>${formatTaskDate(item.date)}</span>
             ${item.time ? `<span>${escapeHtml(item.time)}</span>` : ""}
             <span class="badge">${escapeHtml(item.category)}</span>
-            ${focused ? `<span>专注 ${focused} 分钟</span>` : ""}
             ${item.repeat && item.repeat !== "none" ? `<span class="badge repeat-badge">${repeatText(item.repeat)}</span>` : ""}
             ${isSchedule ? "" : `
               <button class="danger-link edit-link" type="button" data-edit-task="${item.id}">编辑</button>
@@ -1307,23 +1210,6 @@ function renderTaskItem(item, doneDate) {
         </div>
       </div>
     </article>`;
-}
-
-function focusMinutesForTask(task, date) {
-  return (task.focusLogs || [])
-    .filter((log) => log.date === date)
-    .reduce((sum, log) => sum + Number(log.minutes || 0), 0);
-}
-
-function renderFocusTaskOptions() {
-  const select = document.getElementById("focusTaskSelect");
-  if (!select) return;
-  const previous = select.value;
-  const todayTasks = state.tasks.filter((task) => taskOccursOn(task, todayISO())).sort(sortTasks);
-  select.innerHTML = `<option value="">不绑定</option>` + todayTasks
-    .map((task) => `<option value="${escapeHtml(task.id)}">${escapeHtml(task.time ? `${task.time} ${task.title}` : task.title)}</option>`)
-    .join("");
-  if (todayTasks.some((task) => task.id === previous)) select.value = previous;
 }
 
 function bindTaskButtons(root) {
@@ -1374,12 +1260,10 @@ function editTask(id) {
     ...next,
     id: task.id,
     doneDates: task.doneDates || [],
-    focusLogs: task.focusLogs || [],
     createdAt: task.createdAt || next.createdAt
   };
   saveState();
   renderHome();
-  renderFocusTaskOptions();
   renderStats();
 }
 
@@ -1477,9 +1361,7 @@ function sessionMinutes(session) {
 function renderStats() {
   const { start, end } = getStatsRange();
   const dates = eachDate(start, end);
-  const focusSessions = state.focusSessions.filter((session) => inRange(sessionDate(session), start, end));
   const exerciseSessions = state.exerciseSessions.filter((session) => inRange(sessionDate(session), start, end));
-  const focusMinutes = focusSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
   const exerciseMinutes = exerciseSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
   const completedTasks = [];
   state.tasks.forEach((task) => {
@@ -1492,28 +1374,27 @@ function renderStats() {
   const habitRate = habitTotal ? Math.round((habitDone / habitTotal) * 100) : 0;
 
   document.getElementById("statsExercise").textContent = `${exerciseMinutes} 分钟`;
-  document.getElementById("statsFocus").textContent = `${focusMinutes} 分钟`;
   document.getElementById("statsDone").textContent = `${completedTasks.length} 项`;
   document.getElementById("statsHabitRate").textContent = `${habitRate}%`;
 
-  renderTrendChart(dates, focusSessions, exerciseSessions, completedTasks);
-  renderDailySummary(dates, focusSessions, exerciseSessions, completedTasks);
+  renderTrendChart(dates, exerciseSessions, completedTasks);
+  renderDailySummary(dates, exerciseSessions, completedTasks);
   renderCompletedTasks(completedTasks);
-  renderTimeSessions(focusSessions, exerciseSessions);
+  renderTimeSessions(exerciseSessions);
 }
 
-function dailyMetricRows(dates, focusSessions, exerciseSessions, completedTasks) {
+function dailyMetricRows(dates, exerciseSessions, completedTasks) {
   return dates.map((date) => ({
     date,
-    focus: focusSessions.filter((session) => sessionDate(session) === date).reduce((sum, session) => sum + sessionMinutes(session), 0),
     exercise: exerciseSessions.filter((session) => sessionDate(session) === date).reduce((sum, session) => sum + sessionMinutes(session), 0),
-    done: completedTasks.filter((task) => task.date === date).length
+    done: completedTasks.filter((task) => task.date === date).length,
+    habits: state.habits.reduce((sum, habit) => sum + (habit.doneDates || []).filter((doneDate) => doneDate === date).length, 0)
   }));
 }
 
-function renderTrendChart(dates, focusSessions, exerciseSessions, completedTasks) {
+function renderTrendChart(dates, exerciseSessions, completedTasks) {
   const svg = document.getElementById("statsTrendChart");
-  const rows = dailyMetricRows(dates, focusSessions, exerciseSessions, completedTasks);
+  const rows = dailyMetricRows(dates, exerciseSessions, completedTasks);
   document.getElementById("trendRangeLabel").textContent = `${rows.length} 天`;
   if (!rows.length) {
     svg.innerHTML = "";
@@ -1524,20 +1405,19 @@ function renderTrendChart(dates, focusSessions, exerciseSessions, completedTasks
   const padding = { top: 14, right: 12, bottom: 26, left: 24 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.focus, row.exercise, row.done * 10]));
+  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.exercise, row.done * 10]));
   const groupWidth = chartWidth / rows.length;
   const barWidth = Math.max(3, Math.min(9, groupWidth / 4));
   const bars = rows.map((row, index) => {
     const x = padding.left + index * groupWidth + groupWidth / 2;
     const values = [
-      { key: "exercise", value: row.exercise, color: "#9fc08d", offset: -barWidth },
-      { key: "focus", value: row.focus, color: "#8fb2cc", offset: 0 },
-      { key: "done", value: row.done * 10, color: "#df8ea0", offset: barWidth }
+      { label: "运动", value: row.exercise, color: "#9fc08d", offset: -barWidth },
+      { label: "完成", value: row.done * 10, color: "#df8ea0", offset: barWidth }
     ];
     return values.map((bar) => {
       const barHeight = Math.max(1, (bar.value / maxValue) * chartHeight);
       const y = padding.top + chartHeight - barHeight;
-      return `<rect x="${(x + bar.offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth}" height="${barHeight.toFixed(1)}" rx="3" fill="${bar.color}"><title>${row.date} ${bar.key} ${bar.value}</title></rect>`;
+      return `<rect x="${(x + bar.offset).toFixed(1)}" y="${y.toFixed(1)}" width="${barWidth}" height="${barHeight.toFixed(1)}" rx="3" fill="${bar.color}"><title>${row.date} ${bar.label} ${bar.value}</title></rect>`;
     }).join("");
   }).join("");
   const labels = rows.map((row, index) => {
@@ -1552,16 +1432,16 @@ function renderTrendChart(dates, focusSessions, exerciseSessions, completedTasks
   `;
 }
 
-function renderDailySummary(dates, focusSessions, exerciseSessions, completedTasks) {
+function renderDailySummary(dates, exerciseSessions, completedTasks) {
   const list = document.getElementById("dailySummaryList");
   document.getElementById("dailySummaryCount").textContent = `${dates.length} 天`;
-  list.innerHTML = dailyMetricRows(dates, focusSessions, exerciseSessions, completedTasks).slice().reverse().map((row) => {
+  list.innerHTML = dailyMetricRows(dates, exerciseSessions, completedTasks).slice().reverse().map((row) => {
     return `
       <article class="daily-row">
         <time>${formatTaskDate(row.date)}</time>
         <span>运动 ${row.exercise} 分钟</span>
-        <span>专注 ${row.focus} 分钟</span>
         <span>完成 ${row.done} 项</span>
+        <span>打卡 ${row.habits} 项</span>
       </article>
     `;
   }).join("");
@@ -1587,15 +1467,14 @@ function renderCompletedTasks(tasks) {
     `).join("");
 }
 
-function renderTimeSessions(focusSessions, exerciseSessions) {
+function renderTimeSessions(exerciseSessions) {
   const list = document.getElementById("timeSessionList");
-  const sessions = [
-    ...focusSessions.map((session) => ({ ...session, kind: "专注" })),
-    ...exerciseSessions.map((session) => ({ ...session, kind: "运动" }))
-  ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const sessions = exerciseSessions
+    .map((session) => ({ ...session, kind: "运动" }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   document.getElementById("timeSessionCount").textContent = `${sessions.length} 条`;
   if (!sessions.length) {
-    list.innerHTML = `<div class="empty">完成专注或运动后，时间会自动记录在这里。</div>`;
+    list.innerHTML = `<div class="empty">完成运动后，时间会自动记录在这里。</div>`;
     return;
   }
   list.innerHTML = sessions.map((session) => `
@@ -1624,7 +1503,6 @@ function notesToMarkdown() {
 
 function collectReportData(start, end) {
   const dates = eachDate(start, end);
-  const focusSessions = state.focusSessions.filter((session) => inRange(sessionDate(session), start, end));
   const exerciseSessions = state.exerciseSessions.filter((session) => inRange(sessionDate(session), start, end));
   const completedTasks = [];
   state.tasks.forEach((task) => {
@@ -1635,24 +1513,22 @@ function collectReportData(start, end) {
   const notes = state.notes.filter((note) => inRange(dateToISO(new Date(note.createdAt)), start, end));
   const habitDone = state.habits.reduce((sum, habit) => sum + habit.doneDates.filter((date) => inRange(date, start, end)).length, 0);
   const habitTotal = state.habits.length * dates.length;
-  return { dates, focusSessions, exerciseSessions, completedTasks, notes, habitDone, habitTotal };
+  return { dates, exerciseSessions, completedTasks, notes, habitDone, habitTotal };
 }
 
 function reportToMarkdown(start, end, title) {
   const data = collectReportData(start, end);
-  const focusMinutes = data.focusSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
   const exerciseMinutes = data.exerciseSessions.reduce((sum, session) => sum + sessionMinutes(session), 0);
   const habitRate = data.habitTotal ? Math.round((data.habitDone / data.habitTotal) * 100) : 0;
-  const lines = [`# 个人工作台${title}`, "", `范围：${start}${start === end ? "" : ` 至 ${end}`}`, ""];
+  const lines = [`# 双子工作台${title}`, "", `范围：${start}${start === end ? "" : ` 至 ${end}`}`, ""];
   lines.push("## 汇总", "");
   lines.push(`- 运动：${exerciseMinutes} 分钟`);
-  lines.push(`- 专注：${focusMinutes} 分钟`);
   lines.push(`- 完成事项：${data.completedTasks.length} 项`);
   lines.push(`- 打卡率：${habitRate}%`);
   lines.push("");
   lines.push("## 每日汇总", "");
-  dailyMetricRows(data.dates, data.focusSessions, data.exerciseSessions, data.completedTasks).forEach((row) => {
-    lines.push(`- ${row.date}：运动 ${row.exercise} 分钟；专注 ${row.focus} 分钟；完成 ${row.done} 项`);
+  dailyMetricRows(data.dates, data.exerciseSessions, data.completedTasks).forEach((row) => {
+    lines.push(`- ${row.date}：运动 ${row.exercise} 分钟；完成 ${row.done} 项；打卡 ${row.habits} 项`);
   });
   lines.push("");
   lines.push("## 完成事项", "");
@@ -1665,10 +1541,9 @@ function reportToMarkdown(start, end, title) {
   }
   lines.push("");
   lines.push("## 时间记录", "");
-  const sessions = [
-    ...data.focusSessions.map((session) => ({ ...session, kind: "专注" })),
-    ...data.exerciseSessions.map((session) => ({ ...session, kind: "运动" }))
-  ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+  const sessions = data.exerciseSessions
+    .map((session) => ({ ...session, kind: "运动" }))
+    .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
   if (sessions.length) {
     sessions.forEach((session) => {
       lines.push(`- ${formatDateTime(session.createdAt)} [${session.kind}] ${session.title || session.kind}：${sessionMinutes(session)} 分钟`);
@@ -1708,7 +1583,7 @@ function exportBackup() {
     backup[key] = state[key];
   });
   backup.settings = state.settings;
-  downloadText(`个人工作台备份-${todayISO()}.json`, JSON.stringify(backup, null, 2));
+  downloadText(`双子工作台备份-${todayISO()}.json`, JSON.stringify(backup, null, 2));
 }
 
 function importBackup(event) {

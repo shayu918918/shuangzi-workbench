@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "个人工作台",
-  "short_name": "工作台",
-  "description": "移动端优先的个人课表、清单、计时、打卡与统计工作台。",
+  "name": "双子工作台",
+  "short_name": "双子",
+  "description": "移动端优先的课表、清单、计时、打卡与统计工作台。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
@@ -39,7 +39,7 @@
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     },
     {
-      "name": "专注与运动",
+      "name": "运动计时",
       "short_name": "计时",
       "url": "./index.html#timer",
       "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]

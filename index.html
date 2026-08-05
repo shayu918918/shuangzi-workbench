@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#fff8ef">
-  <meta name="application-name" content="工作台">
+  <meta name="application-name" content="双子工作台">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="工作台">
+  <meta name="apple-mobile-web-app-title" content="双子工作台">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="format-detection" content="telephone=no">
-  <title>个人工作台</title>
+  <title>双子工作台</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
@@ -22,7 +22,7 @@
     <header class="topbar">
       <div>
         <p class="eyebrow" id="todayLabel">今日</p>
-        <h1>工作台</h1>
+        <h1>双子工作台</h1>
       </div>
     </header>
 
@@ -115,43 +115,11 @@
       <section class="section" id="view-timer" aria-labelledby="timerTitle">
         <div class="section-head">
           <div>
-            <p class="section-kicker">时间</p>
-            <h2 id="timerTitle">专注与运动</h2>
+            <h2 id="timerTitle">运动计时</h2>
           </div>
         </div>
 
-        <div class="segmented" role="tablist" aria-label="计时模式">
-          <button class="segment active" id="focusTab" type="button" role="tab" aria-selected="true">专注</button>
-          <button class="segment" id="exerciseTab" type="button" role="tab" aria-selected="false">运动</button>
-        </div>
-
-        <div class="timer-panel active" id="focusPanel">
-          <div class="big-clock" id="focusClock">25:00</div>
-          <div class="inline-fields">
-            <label>
-              分钟
-              <input id="focusMinutes" type="number" min="1" max="180" value="25">
-            </label>
-            <label>
-              绑定清单
-              <select id="focusTaskSelect">
-                <option value="">不绑定</option>
-              </select>
-            </label>
-          </div>
-          <label>
-            专注名称
-            <input id="focusTitle" type="text" placeholder="阅读 / 写作 / 备课">
-          </label>
-          <div class="timer-note" id="focusTimerNote" role="status" aria-live="polite"></div>
-          <div class="button-row">
-            <button class="primary-button" id="focusStart" type="button">开始</button>
-            <button class="secondary-button" id="focusPause" type="button">暂停</button>
-            <button class="secondary-button" id="focusReset" type="button">重置</button>
-          </div>
-        </div>
-
-        <div class="timer-panel" id="exercisePanel">
+        <div class="timer-panel active" id="exercisePanel">
           <div class="exercise-stage" id="exerciseStage">准备</div>
           <div class="big-clock" id="exerciseClock">00:10</div>
           <div class="exercise-grid">
@@ -174,7 +142,6 @@
       <section class="section" id="view-schedule" aria-labelledby="scheduleTitlePage">
         <div class="section-head">
           <div>
-            <p class="section-kicker">课程</p>
             <h2 id="scheduleTitlePage">循环课表</h2>
           </div>
         </div>
@@ -207,7 +174,6 @@
       <section class="section" id="view-stats" aria-labelledby="statsTitle">
         <div class="section-head">
           <div>
-            <p class="section-kicker">回看</p>
             <h2 id="statsTitle">时间统计</h2>
           </div>
         </div>
@@ -240,10 +206,6 @@
             <strong id="statsExercise">0 分钟</strong>
           </div>
           <div class="stat-card">
-            <span>专注</span>
-            <strong id="statsFocus">0 分钟</strong>
-          </div>
-          <div class="stat-card">
             <span>完成</span>
             <strong id="statsDone">0 项</strong>
           </div>
@@ -258,7 +220,7 @@
           <span id="trendRangeLabel">0 天</span>
         </div>
         <div class="trend-card">
-          <svg id="statsTrendChart" viewBox="0 0 360 150" role="img" aria-label="运动、专注和完成事项趋势"></svg>
+          <svg id="statsTrendChart" viewBox="0 0 360 150" role="img" aria-label="运动和完成事项趋势"></svg>
         </div>
 
         <div class="subhead">
@@ -283,7 +245,6 @@
       <section class="section" id="view-settings" aria-labelledby="settingsTitle">
         <div class="section-head">
           <div>
-            <p class="section-kicker">设置</p>
             <h2 id="settingsTitle">应用设置</h2>
           </div>
         </div>

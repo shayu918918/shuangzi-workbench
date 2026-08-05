@@ -2080,20 +2080,6 @@ h1 {
   transform: translateY(-1px);
 }
 
-.habit-card.done::after {
-  content: "已打卡";
-  position: absolute;
-  top: 9px;
-  right: 9px;
-  min-height: 22px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #c2707c;
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .repeat-badge {
   background: rgba(239, 189, 138, 0.2);
   color: #b27a4a;
@@ -3444,8 +3430,10 @@ h1 {
 }
 
 .exercise-preview strong {
-  font-size: 1.28rem;
-  line-height: 1.2;
+  color: #8f7770;
+  font-size: 0.86rem;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .exercise-preview small {
@@ -3454,4 +3442,12 @@ h1 {
 
 .habit-preview > span:first-child {
   white-space: nowrap;
+}
+
+button:disabled {
+  opacity: 0.48;
+}
+
+.section-head h2:first-child {
+  margin-top: 0;
 }
