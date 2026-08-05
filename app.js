@@ -26,6 +26,7 @@ let exerciseSteps = [];
 let audioContext;
 let toastTimer;
 let deferredInstallPrompt;
+let wakeLock;
 
 function createTimerState() {
   return {
@@ -895,6 +896,7 @@ function buildExerciseSteps() {
 
 function resetExercise() {
   clearInterval(exerciseTimer.interval);
+  releaseExerciseWakeLock();
   exerciseSteps = buildExerciseSteps();
   exerciseTimer = createTimerState();
   exerciseTimer.remaining = exerciseSteps[0]?.seconds || 10;
@@ -903,10 +905,11 @@ function resetExercise() {
   document.getElementById("exerciseClock").textContent = formatSeconds(exerciseTimer.remaining);
 }
 
-function startExercise() {
+async function startExercise() {
   initAudio();
   if (exerciseTimer.running) return;
   setTimerNote("exerciseTimerNote", "");
+  await requestExerciseWakeLock();
   exerciseTimer.running = true;
   exerciseTimer.startedAt ||= new Date().toISOString();
   playExerciseCue("stage", exerciseSteps[exerciseTimer.stepIndex]?.tone || 700);
@@ -918,6 +921,7 @@ function startExercise() {
       if (exerciseTimer.stepIndex >= exerciseSteps.length) {
         clearInterval(exerciseTimer.interval);
         exerciseTimer.running = false;
+        releaseExerciseWakeLock();
         playExerciseCue("finish", 920);
         state.exerciseSessions.unshift({
           id: uid("exercise"),
@@ -947,7 +951,35 @@ function startExercise() {
 function pauseExercise() {
   clearInterval(exerciseTimer.interval);
   exerciseTimer.running = false;
+  releaseExerciseWakeLock();
 }
+
+async function requestExerciseWakeLock() {
+  if (!("wakeLock" in navigator)) {
+    setTimerNote("exerciseTimerNote", "当前浏览器不支持屏幕常亮，请临时调高系统自动锁屏时间。");
+    return;
+  }
+  try {
+    wakeLock = await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release", () => {
+      wakeLock = null;
+    });
+  } catch {
+    setTimerNote("exerciseTimerNote", "屏幕常亮未开启，请检查浏览器权限或系统省电设置。");
+  }
+}
+
+function releaseExerciseWakeLock() {
+  if (!wakeLock) return;
+  wakeLock.release().catch(() => {});
+  wakeLock = null;
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && exerciseTimer.running && !wakeLock) {
+    requestExerciseWakeLock();
+  }
+});
 
 function setTimerNote(id, message) {
   const note = document.getElementById(id);

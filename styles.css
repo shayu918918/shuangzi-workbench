@@ -3428,3 +3428,30 @@ h1 {
   color: #9c8179;
   font-size: 0.86rem;
 }
+
+/* Mobile dashboard readability */
+.exercise-preview {
+  grid-template-columns: 1fr;
+  align-content: start;
+}
+
+.exercise-preview span,
+.exercise-preview small,
+.exercise-preview strong {
+  grid-column: 1;
+  grid-row: auto;
+  text-align: left;
+}
+
+.exercise-preview strong {
+  font-size: 1.28rem;
+  line-height: 1.2;
+}
+
+.exercise-preview small {
+  max-width: 100%;
+}
+
+.habit-preview > span:first-child {
+  white-space: nowrap;
+}
