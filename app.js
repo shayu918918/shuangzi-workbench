@@ -479,6 +479,13 @@ function jumpFromDashboard(target) {
     setView("home");
     history.replaceState(null, "", "#home");
     document.getElementById("homeHabitsModule")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    return;
+  }
+  if (target === "tasks") {
+    setView("home");
+    history.replaceState(null, "", "#home");
+    document.getElementById("homeTasksModule")?.scrollIntoView({ block: "start", behavior: "smooth" });
+    document.getElementById("quickTaskInput")?.focus({ preventScroll: true });
   }
 }
 
@@ -571,7 +578,7 @@ function setupForms() {
     const start = document.getElementById("notesStart")?.value || todayISO();
     const end = document.getElementById("notesEnd")?.value || todayISO();
     playUiSound("export");
-    downloadText(`双子工作台随手记录-${start}_${end}.md`, notesToMarkdown(start, end));
+    downloadText(`双子工作台随手记录-${start}_${end}.txt`, notesToText(start, end));
   });
   document.getElementById("exportDailyButton").addEventListener("click", () => {
     const today = todayISO();
@@ -1043,7 +1050,7 @@ function renderDashboardPreview(scheduleItems, taskItems, doneCount, taskTotal) 
     taskMeta.textContent = `已完成 ${doneCount}/${taskTotal}`;
   } else {
     taskTitle.innerHTML = `<div class="dashboard-empty">暂无待办</div>`;
-    taskMeta.textContent = "可以直接添加";
+    taskMeta.textContent = "";
   }
 
   const exerciseGoal = exerciseGoalMinutes();
@@ -1282,7 +1289,10 @@ function renderTaskItem(item, doneDate) {
 
 function bindTaskButtons(root) {
   root.querySelectorAll("[data-toggle-task]").forEach((button) => {
-    button.addEventListener("click", () => toggleTask(button.dataset.toggleTask, button.dataset.doneDate));
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      toggleTask(button.dataset.toggleTask, button.dataset.doneDate);
+    });
   });
   root.querySelectorAll("[data-delete-task]").forEach((button) => {
     button.addEventListener("click", () => deleteTask(button.dataset.deleteTask));
@@ -1572,7 +1582,7 @@ function renderTimeSessions(exerciseSessions) {
   `).join("");
 }
 
-function notesToMarkdown(start = "", end = "") {
+function notesToText(start = "", end = "") {
   let rangeStart = start || "0000-01-01";
   let rangeEnd = end || "9999-12-31";
   if (rangeStart > rangeEnd) [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
@@ -1580,14 +1590,14 @@ function notesToMarkdown(start = "", end = "") {
     const date = noteDate(note);
     return date >= rangeStart && date <= rangeEnd;
   });
-  const lines = ["# 随手记录", "", `范围：${rangeStart}${rangeStart === rangeEnd ? "" : ` 至 ${rangeEnd}`}`, ""];
+  const lines = ["随手记录", `范围：${rangeStart}${rangeStart === rangeEnd ? "" : ` 至 ${rangeEnd}`}`, ""];
   if (!notes.length) {
-    lines.push("- 无");
+    lines.push("无");
     return lines.join("\n");
   }
   notes.forEach((note) => {
-    lines.push(`## ${noteDate(note)}`);
-    lines.push("");
+    lines.push(noteDate(note));
+    lines.push("----------");
     lines.push(note.text);
     lines.push("");
   });
