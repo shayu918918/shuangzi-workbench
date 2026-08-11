@@ -3534,3 +3534,31 @@ button:disabled {
   flex: 0 0 4px;
   margin: 0;
 }
+
+.bottom-nav {
+  grid-template-columns: repeat(6, 1fr);
+}
+
+.nav-item {
+  min-width: 0;
+}
+
+.note-form textarea {
+  min-height: 132px;
+  resize: vertical;
+}
+
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+#view-notes .settings-details[open] {
+  display: grid;
+  gap: 12px;
+}
+
+#view-notes .item-title {
+  white-space: pre-wrap;
+}

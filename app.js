@@ -1,6 +1,5 @@
 const STORAGE_KEY = "personal-workbench-v2";
 const LEGACY_STORAGE_KEY = "personal-workbench-v1";
-const tagOptions = ["生活", "情绪", "阅读", "写作", "论文灵感", "待深想"];
 const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const arrayStateKeys = ["tasks", "notes", "schedule", "focusSessions", "exerciseSessions", "habits"];
 const habitAccentCycle = ["green", "blue", "peach", "purple", "sage", "rose", "berry"];
@@ -18,8 +17,8 @@ const pinnedHabits = [
 ];
 
 const state = loadState();
+migrateDailyNotes();
 seedPinnedHabits();
-const selectedTags = new Set(["生活"]);
 let exerciseTimer = createTimerState();
 let exerciseSteps = [];
 let audioContext;
@@ -35,7 +34,8 @@ function createTimerState() {
     running: false,
     interval: null,
     startedAt: null,
-    stepIndex: 0
+    stepIndex: 0,
+    activeTotal: 0
   };
 }
 
@@ -53,6 +53,12 @@ function loadState() {
       interactionSound: "soft",
       homeOrder: "schedule-tasks-habits",
       exerciseGoalMinutes: 30,
+      warmupSeconds: 10,
+      leftSeconds: 40,
+      switchSeconds: 10,
+      rightSeconds: 40,
+      restSeconds: 30,
+      exerciseRounds: 3,
       hiddenHomeModules: []
     }
   };
@@ -83,6 +89,10 @@ function capitalize(value) {
 
 function normalizeExerciseGoal(value) {
   return Math.min(180, Math.max(5, Number(value) || 30));
+}
+
+function normalizeTimerSetting(value, fallback, min = 1, max = 900) {
+  return Math.min(max, Math.max(min, Number(value) || fallback));
 }
 
 function exerciseGoalMinutes() {
@@ -126,6 +136,46 @@ function seedPinnedHabits() {
   });
   state.settings = { ...(state.settings || {}), habitSeedVersion: pinnedHabitSeedVersion };
   saveState();
+}
+
+function noteDate(note) {
+  return note.date || dateToISO(new Date(note.createdAt || Date.now()));
+}
+
+function migrateDailyNotes() {
+  if (!Array.isArray(state.notes) || !state.notes.length) return;
+  const grouped = new Map();
+  state.notes.forEach((note) => {
+    const date = noteDate(note);
+    const current = grouped.get(date);
+    const normalized = {
+      id: current?.id || note.id || uid("note"),
+      date,
+      text: [current?.text, note.text].filter(Boolean).join("\n\n"),
+      createdAt: current?.createdAt && current.createdAt < note.createdAt ? current.createdAt : (note.createdAt || new Date().toISOString()),
+      updatedAt: note.updatedAt || note.createdAt || new Date().toISOString()
+    };
+    grouped.set(date, normalized);
+  });
+  state.notes = Array.from(grouped.values()).sort((a, b) => b.date.localeCompare(a.date));
+  saveState();
+}
+
+function saveDailyNote(date, text) {
+  const existing = state.notes.find((note) => noteDate(note) === date);
+  if (existing) {
+    existing.text = text;
+    existing.date = date;
+    existing.updatedAt = new Date().toISOString();
+    return;
+  }
+  state.notes.unshift({
+    id: uid("note"),
+    date,
+    text,
+    createdAt: `${date}T${new Date().toTimeString().slice(0, 8)}`,
+    updatedAt: new Date().toISOString()
+  });
 }
 
 function uid(prefix) {
@@ -363,7 +413,6 @@ function init() {
   }).format(new Date());
 
   setupNavigation();
-  setupTags();
   setupForms();
   setupStatsControls();
   setupTimers();
@@ -403,7 +452,7 @@ function setupNavigation() {
 }
 
 function setView(view) {
-  const nextView = ["home", "timer", "schedule", "stats", "settings"].includes(view) ? view : "home";
+  const nextView = ["home", "timer", "schedule", "stats", "notes", "settings"].includes(view) ? view : "home";
   document.querySelectorAll(".nav-item").forEach((item) => item.classList.toggle("active", item.dataset.view === nextView));
   document.querySelectorAll(".section").forEach((section) => section.classList.toggle("active", section.id === `view-${nextView}`));
 }
@@ -433,46 +482,6 @@ function jumpFromDashboard(target) {
   }
 }
 
-function setupTags() {
-  const tagBox = document.getElementById("tagChips");
-  if (!tagBox) return;
-  tagOptions.forEach((tag) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = `chip${selectedTags.has(tag) ? " active" : ""}`;
-    button.textContent = tag;
-    button.addEventListener("click", () => {
-      if (selectedTags.has(tag)) selectedTags.delete(tag);
-      else selectedTags.add(tag);
-      button.classList.toggle("active");
-      playUiSound("toggle");
-    });
-    tagBox.append(button);
-  });
-
-  document.getElementById("addTagButton")?.addEventListener("click", () => {
-    const input = document.getElementById("customTagInput");
-    const tag = input.value.trim();
-    if (!tag) {
-      playUiSound("error");
-      return;
-    }
-    selectedTags.add(tag);
-    input.value = "";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "chip active";
-    button.textContent = tag;
-    button.addEventListener("click", () => {
-      selectedTags.delete(tag);
-      playUiSound("toggle");
-      button.remove();
-    });
-    tagBox.append(button);
-    playUiSound("save");
-  });
-}
-
 function setupForms() {
   document.getElementById("quickTaskForm").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -499,13 +508,7 @@ function setupForms() {
       playUiSound("error");
       return;
     }
-    state.notes.unshift({
-      id: uid("note"),
-      text,
-      tags: [...selectedTags],
-      createdAt: new Date().toISOString()
-    });
-    textarea.value = "";
+    saveDailyNote(todayISO(), text);
     saveState();
     renderNotes();
     playUiSound("save");
@@ -565,8 +568,10 @@ function setupForms() {
   });
 
   document.getElementById("exportNotesButton")?.addEventListener("click", () => {
+    const start = document.getElementById("notesStart")?.value || todayISO();
+    const end = document.getElementById("notesEnd")?.value || todayISO();
     playUiSound("export");
-    downloadText("个人感想.md", notesToMarkdown());
+    downloadText(`双子工作台随手记录-${start}_${end}.md`, notesToMarkdown(start, end));
   });
   document.getElementById("exportDailyButton").addEventListener("click", () => {
     const today = todayISO();
@@ -597,6 +602,12 @@ function setupStatsControls() {
   range.addEventListener("change", renderStats);
   start.addEventListener("change", renderStats);
   end.addEventListener("change", renderStats);
+  const notesStart = document.getElementById("notesStart");
+  const notesEnd = document.getElementById("notesEnd");
+  if (notesStart && notesEnd) {
+    notesStart.value = weekAgo;
+    notesEnd.value = today;
+  }
 }
 
 function applySettings() {
@@ -615,6 +626,12 @@ function applySettings() {
   document.getElementById("soundMode").value = soundMode;
   document.getElementById("interactionSound").value = interactionSound;
   document.getElementById("exerciseGoalMinutes").value = goalMinutes;
+  document.getElementById("warmupSeconds").value = normalizeTimerSetting(state.settings?.warmupSeconds, 10, 1, 300);
+  document.getElementById("leftSeconds").value = normalizeTimerSetting(state.settings?.leftSeconds, 40);
+  document.getElementById("switchSeconds").value = normalizeTimerSetting(state.settings?.switchSeconds, 10, 1, 300);
+  document.getElementById("rightSeconds").value = normalizeTimerSetting(state.settings?.rightSeconds, 40);
+  document.getElementById("restSeconds").value = normalizeTimerSetting(state.settings?.restSeconds, 30);
+  document.getElementById("exerciseRounds").value = normalizeTimerSetting(state.settings?.exerciseRounds, 3, 1, 20);
   document.getElementById("homeOrder").value = homeOrder;
   ["schedule", "tasks", "habits"].forEach((module) => {
     document.getElementById(`showHome${capitalize(module)}`).checked = !state.settings?.hiddenHomeModules?.includes(module);
@@ -660,9 +677,22 @@ function setupTimers() {
     resetExercise();
   });
   ["warmupSeconds", "leftSeconds", "switchSeconds", "rightSeconds", "restSeconds", "exerciseRounds"].forEach((id) => {
-    document.getElementById(id).addEventListener("input", resetExercise);
+    document.getElementById(id).addEventListener("input", () => {
+      saveExerciseTimerSettings();
+      resetExercise();
+    });
   });
   resetExercise();
+}
+
+function saveExerciseTimerSettings() {
+  state.settings.warmupSeconds = normalizeTimerSetting(document.getElementById("warmupSeconds").value, 10, 1, 300);
+  state.settings.leftSeconds = normalizeTimerSetting(document.getElementById("leftSeconds").value, 40);
+  state.settings.switchSeconds = normalizeTimerSetting(document.getElementById("switchSeconds").value, 10, 1, 300);
+  state.settings.rightSeconds = normalizeTimerSetting(document.getElementById("rightSeconds").value, 40);
+  state.settings.restSeconds = normalizeTimerSetting(document.getElementById("restSeconds").value, 30);
+  state.settings.exerciseRounds = normalizeTimerSetting(document.getElementById("exerciseRounds").value, 3, 1, 20);
+  saveState();
 }
 
 function setupPWA() {
@@ -702,13 +732,13 @@ function initAudio() {
   if (audioContext.state === "suspended") audioContext.resume();
 }
 
-function beep(frequency = 740, duration = 0.16, volume = 0.28, delay = 0) {
+function beep(frequency = 740, duration = 0.16, volume = 0.28, delay = 0, type = "triangle") {
   initAudio();
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
   const startAt = audioContext.currentTime + delay;
   oscillator.frequency.value = frequency;
-  oscillator.type = "triangle";
+  oscillator.type = type;
   gain.gain.setValueAtTime(0.0001, startAt);
   gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
@@ -758,18 +788,50 @@ function playHabitSuccessSound() {
 function playExerciseCue(kind = "stage", tone = 740) {
   const mode = state.settings?.soundMode || "strong";
   if (mode === "silent") return;
-  if (mode === "soft") {
-    beep(tone, 0.2, 0.26);
-    return;
-  }
-  const pattern = kind === "finish"
-    ? [880, 1040, 1220, 1040]
-    : [tone, tone + 120, tone];
-  pattern.forEach((frequency, index) => {
-    beep(frequency, 0.18, 0.42, index * 0.22);
+  const patterns = {
+    warmup: [
+      { frequency: 523, duration: 0.16, delay: 0, volume: 0.28, type: "sine" },
+      { frequency: 659, duration: 0.2, delay: 0.17, volume: 0.3, type: "sine" }
+    ],
+    left: [
+      { frequency: 740, duration: 0.14, delay: 0, volume: 0.42, type: "square" },
+      { frequency: 980, duration: 0.18, delay: 0.16, volume: 0.42, type: "triangle" }
+    ],
+    switch: [
+      { frequency: 1280, duration: 0.08, delay: 0, volume: 0.46, type: "square" },
+      { frequency: 1280, duration: 0.08, delay: 0.12, volume: 0.46, type: "square" },
+      { frequency: 1280, duration: 0.12, delay: 0.24, volume: 0.48, type: "square" }
+    ],
+    right: [
+      { frequency: 980, duration: 0.14, delay: 0, volume: 0.42, type: "triangle" },
+      { frequency: 740, duration: 0.2, delay: 0.16, volume: 0.42, type: "square" }
+    ],
+    rest: [
+      { frequency: 392, duration: 0.28, delay: 0, volume: 0.68, type: "triangle" },
+      { frequency: 294, duration: 0.38, delay: 0.3, volume: 0.64, type: "triangle" },
+      { frequency: 220, duration: 0.52, delay: 0.72, volume: 0.56, type: "sine" }
+    ],
+    finish: [
+      { frequency: 880, duration: 0.14, delay: 0, volume: 0.42, type: "triangle" },
+      { frequency: 1046, duration: 0.16, delay: 0.16, volume: 0.44, type: "triangle" },
+      { frequency: 1318, duration: 0.2, delay: 0.34, volume: 0.42, type: "sine" },
+      { frequency: 1046, duration: 0.28, delay: 0.58, volume: 0.34, type: "sine" }
+    ]
+  };
+  const pattern = patterns[kind] || [{ frequency: tone, duration: 0.18, delay: 0 }];
+  const volumeScale = mode === "soft" ? 0.58 : 1;
+  pattern.forEach(({ frequency, duration, delay, volume = 0.42, type = "triangle" }) => {
+    beep(frequency, duration, volume * volumeScale, delay, type);
   });
   if ("vibrate" in navigator) {
-    navigator.vibrate(kind === "finish" ? [180, 80, 180, 80, 260] : [140, 70, 140]);
+    const vibration = kind === "finish"
+      ? [180, 80, 180, 80, 260]
+      : kind === "rest"
+        ? [260, 100, 420]
+        : kind === "switch"
+          ? [70, 40, 70, 40, 110]
+          : [130, 60, 130];
+    navigator.vibrate(vibration);
   }
 }
 
@@ -781,20 +843,24 @@ function formatSeconds(seconds) {
 
 function buildExerciseSteps() {
   const rounds = Math.max(1, Number(document.getElementById("exerciseRounds").value || 1));
-  const base = [
-    ["准备", "warmupSeconds", 620],
-    ["左边", "leftSeconds", 760],
-    ["换边准备", "switchSeconds", 620],
-    ["右边", "rightSeconds", 760],
-    ["休息", "restSeconds", 520]
-  ];
-  const steps = [];
+  const steps = [{
+    title: "准备",
+    seconds: Math.max(1, Number(document.getElementById("warmupSeconds").value || 1)),
+    cue: "warmup",
+    active: false
+  }];
   for (let round = 1; round <= rounds; round += 1) {
-    base.forEach(([title, inputId, tone]) => {
+    [
+      ["左边", "leftSeconds", "left", true],
+      ["换边准备", "switchSeconds", "switch", false],
+      ["右边", "rightSeconds", "right", true],
+      ["休息", "restSeconds", "rest", false]
+    ].forEach(([title, inputId, cue, active]) => {
       steps.push({
         title: `${title} ${round}/${rounds}`,
         seconds: Math.max(1, Number(document.getElementById(inputId).value || 1)),
-        tone
+        cue,
+        active
       });
     });
   }
@@ -808,6 +874,7 @@ function resetExercise() {
   exerciseTimer = createTimerState();
   exerciseTimer.remaining = exerciseSteps[0]?.seconds || 10;
   exerciseTimer.total = exerciseSteps.reduce((sum, step) => sum + step.seconds, 0);
+  exerciseTimer.activeTotal = exerciseSteps.filter((step) => step.active).reduce((sum, step) => sum + step.seconds, 0);
   document.getElementById("exerciseStage").textContent = exerciseSteps[0]?.title || "准备";
   document.getElementById("exerciseClock").textContent = formatSeconds(exerciseTimer.remaining);
 }
@@ -819,7 +886,7 @@ async function startExercise() {
   await requestExerciseWakeLock();
   exerciseTimer.running = true;
   exerciseTimer.startedAt ||= new Date().toISOString();
-  playExerciseCue("stage", exerciseSteps[exerciseTimer.stepIndex]?.tone || 700);
+  playExerciseCue(exerciseSteps[exerciseTimer.stepIndex]?.cue || "warmup");
   exerciseTimer.interval = setInterval(() => {
     exerciseTimer.remaining -= 1;
     document.getElementById("exerciseClock").textContent = formatSeconds(Math.max(0, exerciseTimer.remaining));
@@ -833,8 +900,9 @@ async function startExercise() {
         state.exerciseSessions.unshift({
           id: uid("exercise"),
           title: "居家运动",
-          seconds: exerciseTimer.total,
-          minutes: Math.max(1, Math.round(exerciseTimer.total / 60)),
+          seconds: exerciseTimer.activeTotal,
+          totalSeconds: exerciseTimer.total,
+          minutes: Math.max(1, Math.round(exerciseTimer.activeTotal / 60)),
           createdAt: new Date().toISOString()
         });
         const completedHabit = completeHabitByTitle(/运动|健身|跑|练/);
@@ -842,7 +910,7 @@ async function startExercise() {
         renderHome();
         renderHabits();
         renderStats();
-        setTimerNote("exerciseTimerNote", completedHabit ? "已记录运动时长，并自动完成今日运动打卡。" : "已记录运动时长。");
+        setTimerNote("exerciseTimerNote", completedHabit ? "已记录左右边运动时长，并自动完成今日运动打卡。" : "已记录左右边运动时长。");
         resetExercise();
         return;
       }
@@ -850,7 +918,7 @@ async function startExercise() {
       exerciseTimer.remaining = step.seconds;
       document.getElementById("exerciseStage").textContent = step.title;
       document.getElementById("exerciseClock").textContent = formatSeconds(step.seconds);
-      playExerciseCue("stage", step.tone);
+      playExerciseCue(step.cue);
     }
   }, 1000);
 }
@@ -1270,28 +1338,44 @@ function editTask(id) {
 function renderNotes() {
   const list = document.getElementById("notesList");
   if (!list) return;
-  if (!state.notes.length) {
-    list.innerHTML = `<div class="empty">还没有感想。可以从一句话开始。</div>`;
+  const today = todayISO();
+  const todayNote = state.notes.find((note) => noteDate(note) === today);
+  const textarea = document.getElementById("noteText");
+  if (textarea && document.activeElement !== textarea) textarea.value = todayNote?.text || "";
+  const pastNotes = state.notes
+    .filter((note) => noteDate(note) < today)
+    .sort((a, b) => noteDate(b).localeCompare(noteDate(a)));
+  document.getElementById("notesCount").textContent = `${pastNotes.length} 张`;
+  if (!pastNotes.length) {
+    list.innerHTML = `<div class="empty">过去的便签会在这里归档。</div>`;
     return;
   }
-  list.innerHTML = state.notes.map((note) => `
+  list.innerHTML = pastNotes.map((note) => `
     <article class="item">
       <div class="item-title">${escapeHtml(note.text).replaceAll("\n", "<br>")}</div>
       <div class="item-meta">
-        <span>${formatDateTime(note.createdAt)}</span>
-        ${note.tags.map((tag) => `<span class="badge">${escapeHtml(tag)}</span>`).join("")}
-        <button class="danger-link" type="button" data-delete-note="${note.id}">删除</button>
+        <span>${formatTaskDate(noteDate(note))}</span>
+        <button class="danger-link edit-link" type="button" data-edit-note="${note.id}">修改</button>
       </div>
     </article>
   `).join("");
-  list.querySelectorAll("[data-delete-note]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.notes = state.notes.filter((note) => note.id !== button.dataset.deleteNote);
-      saveState();
-      renderNotes();
-      playUiSound("delete");
-    });
+  list.querySelectorAll("[data-edit-note]").forEach((button) => {
+    button.addEventListener("click", () => editDailyNote(button.dataset.editNote));
   });
+}
+
+function editDailyNote(id) {
+  const note = state.notes.find((item) => item.id === id);
+  if (!note) return;
+  const text = prompt(`${formatTaskDate(noteDate(note))} 的便签`, note.text);
+  if (text === null) return;
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  note.text = trimmed;
+  note.updatedAt = new Date().toISOString();
+  saveState();
+  renderNotes();
+  playUiSound("save");
 }
 
 function renderSchedule() {
@@ -1488,12 +1572,21 @@ function renderTimeSessions(exerciseSessions) {
   `).join("");
 }
 
-function notesToMarkdown() {
-  const lines = ["# 个人感想", ""];
-  state.notes.forEach((note) => {
-    lines.push(`## ${formatDateTime(note.createdAt)}`);
-    lines.push("");
-    lines.push(`标签：${note.tags.join("、") || "无"}`);
+function notesToMarkdown(start = "", end = "") {
+  let rangeStart = start || "0000-01-01";
+  let rangeEnd = end || "9999-12-31";
+  if (rangeStart > rangeEnd) [rangeStart, rangeEnd] = [rangeEnd, rangeStart];
+  const notes = state.notes.filter((note) => {
+    const date = noteDate(note);
+    return date >= rangeStart && date <= rangeEnd;
+  });
+  const lines = ["# 随手记录", "", `范围：${rangeStart}${rangeStart === rangeEnd ? "" : ` 至 ${rangeEnd}`}`, ""];
+  if (!notes.length) {
+    lines.push("- 无");
+    return lines.join("\n");
+  }
+  notes.forEach((note) => {
+    lines.push(`## ${noteDate(note)}`);
     lines.push("");
     lines.push(note.text);
     lines.push("");
@@ -1510,7 +1603,7 @@ function collectReportData(start, end) {
       completedTasks.push({ date, title: task.title, category: task.category });
     });
   });
-  const notes = state.notes.filter((note) => inRange(dateToISO(new Date(note.createdAt)), start, end));
+  const notes = state.notes.filter((note) => inRange(noteDate(note), start, end));
   const habitDone = state.habits.reduce((sum, habit) => sum + habit.doneDates.filter((date) => inRange(date, start, end)).length, 0);
   const habitTotal = state.habits.length * dates.length;
   return { dates, exerciseSessions, completedTasks, notes, habitDone, habitTotal };
@@ -1552,11 +1645,10 @@ function reportToMarkdown(start, end, title) {
     lines.push("- 无");
   }
   lines.push("");
-  lines.push("## 个人感想", "");
+  lines.push("## 随手记录", "");
   if (data.notes.length) {
     data.notes.forEach((note) => {
-      lines.push(`### ${formatDateTime(note.createdAt)}`);
-      lines.push(`标签：${note.tags.join("、") || "无"}`);
+      lines.push(`### ${noteDate(note)}`);
       lines.push("");
       lines.push(note.text);
       lines.push("");
