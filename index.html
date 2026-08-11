@@ -220,7 +220,13 @@
           <span id="trendRangeLabel">0 天</span>
         </div>
         <div class="trend-card">
+          <div class="chart-legend" aria-label="趋势图图例">
+            <span><i class="legend-exercise"></i>运动分钟</span>
+            <span><i class="legend-done"></i>完成事项</span>
+            <span><i class="legend-habit"></i>打卡项数</span>
+          </div>
           <svg id="statsTrendChart" viewBox="0 0 360 150" role="img" aria-label="运动和完成事项趋势"></svg>
+          <p class="chart-note">柱高用于看趋势，完成和打卡按项数折算显示；准确数字见每日汇总。</p>
         </div>
 
         <div class="subhead">
@@ -255,7 +261,7 @@
           <button class="primary-button" type="submit">保存今日便签</button>
         </form>
 
-        <details class="panel-form settings-details" open>
+        <details class="panel-form settings-details notes-export" open>
           <summary>导出记录</summary>
           <div class="inline-fields">
             <label>

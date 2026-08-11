@@ -3,6 +3,13 @@ const LEGACY_STORAGE_KEY = "personal-workbench-v1";
 const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 const arrayStateKeys = ["tasks", "notes", "schedule", "focusSessions", "exerciseSessions", "habits"];
 const habitAccentCycle = ["green", "blue", "peach", "purple", "sage", "rose", "berry"];
+const listLimits = {
+  allTasks: 12,
+  notes: 7,
+  dailySummary: 14,
+  completedTasks: 12,
+  timeSessions: 12
+};
 const defaultHabits = [
   { id: "habit-reading", title: "阅读", accent: "green", doneDates: [] },
   { id: "habit-writing", title: "写作", accent: "blue", doneDates: [] },
@@ -81,6 +88,20 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+function visibleListItems(key, items) {
+  const limit = listLimits[key] || items.length;
+  return items.slice(0, limit);
+}
+
+function listOverflowNotice(key, total, unit = "项") {
+  const limit = listLimits[key] || total;
+  if (total <= limit) return "";
+  return `
+    <div class="list-overflow-note">
+      仅显示最近 ${limit} ${unit}，其余 ${total - limit} ${unit}已归档
+    </div>`;
 }
 
 function capitalize(value) {
@@ -1015,8 +1036,9 @@ function renderHome() {
     ? sortedTodayTasks.map((item) => renderTaskItem(item, today)).join("")
     : `<div class="empty empty-compact">暂无待办</div>`;
 
+  const visibleAllTasks = visibleListItems("allTasks", allTasks);
   allTaskList.innerHTML = allTasks.length
-    ? allTasks.map((item) => renderTaskItem(item, item.date)).join("")
+    ? visibleAllTasks.map((item) => renderTaskItem(item, item.date)).join("") + listOverflowNotice("allTasks", allTasks.length, "项")
     : `<div class="empty empty-compact">暂无未来清单</div>`;
 
   bindTaskButtons(todayList);
@@ -1360,7 +1382,8 @@ function renderNotes() {
     list.innerHTML = `<div class="empty">过去的便签会在这里归档。</div>`;
     return;
   }
-  list.innerHTML = pastNotes.map((note) => `
+  const visibleNotes = visibleListItems("notes", pastNotes);
+  list.innerHTML = visibleNotes.map((note) => `
     <article class="item">
       <div class="item-title">${escapeHtml(note.text).replaceAll("\n", "<br>")}</div>
       <div class="item-meta">
@@ -1368,7 +1391,7 @@ function renderNotes() {
         <button class="danger-link edit-link" type="button" data-edit-note="${note.id}">修改</button>
       </div>
     </article>
-  `).join("");
+  `).join("") + listOverflowNotice("notes", pastNotes.length, "张");
   list.querySelectorAll("[data-edit-note]").forEach((button) => {
     button.addEventListener("click", () => editDailyNote(button.dataset.editNote));
   });
@@ -1499,14 +1522,15 @@ function renderTrendChart(dates, exerciseSessions, completedTasks) {
   const padding = { top: 14, right: 12, bottom: 26, left: 24 };
   const chartWidth = width - padding.left - padding.right;
   const chartHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.exercise, row.done * 10]));
+  const maxValue = Math.max(1, ...rows.flatMap((row) => [row.exercise, row.done * 10, row.habits * 10]));
   const groupWidth = chartWidth / rows.length;
-  const barWidth = Math.max(3, Math.min(9, groupWidth / 4));
+  const barWidth = Math.max(3, Math.min(8, groupWidth / 5));
   const bars = rows.map((row, index) => {
     const x = padding.left + index * groupWidth + groupWidth / 2;
     const values = [
       { label: "运动", value: row.exercise, color: "#9fc08d", offset: -barWidth },
-      { label: "完成", value: row.done * 10, color: "#df8ea0", offset: barWidth }
+      { label: "完成", value: row.done * 10, color: "#df8ea0", offset: 0 },
+      { label: "打卡", value: row.habits * 10, color: "#8fb2cc", offset: barWidth }
     ];
     return values.map((bar) => {
       const barHeight = Math.max(1, (bar.value / maxValue) * chartHeight);
@@ -1529,7 +1553,9 @@ function renderTrendChart(dates, exerciseSessions, completedTasks) {
 function renderDailySummary(dates, exerciseSessions, completedTasks) {
   const list = document.getElementById("dailySummaryList");
   document.getElementById("dailySummaryCount").textContent = `${dates.length} 天`;
-  list.innerHTML = dailyMetricRows(dates, exerciseSessions, completedTasks).slice().reverse().map((row) => {
+  const rows = dailyMetricRows(dates, exerciseSessions, completedTasks).slice().reverse();
+  const visibleRows = visibleListItems("dailySummary", rows);
+  list.innerHTML = visibleRows.map((row) => {
     return `
       <article class="daily-row">
         <time>${formatTaskDate(row.date)}</time>
@@ -1538,7 +1564,7 @@ function renderDailySummary(dates, exerciseSessions, completedTasks) {
         <span>打卡 ${row.habits} 项</span>
       </article>
     `;
-  }).join("");
+  }).join("") + listOverflowNotice("dailySummary", rows.length, "天");
 }
 
 function renderCompletedTasks(tasks) {
@@ -1548,8 +1574,9 @@ function renderCompletedTasks(tasks) {
     list.innerHTML = `<div class="empty">这个时间段还没有完成事项。</div>`;
     return;
   }
-  list.innerHTML = tasks
-    .sort((a, b) => b.date.localeCompare(a.date))
+  const sortedTasks = tasks.sort((a, b) => b.date.localeCompare(a.date));
+  const visibleTasks = visibleListItems("completedTasks", sortedTasks);
+  list.innerHTML = visibleTasks
     .map((task) => `
       <article class="item">
         <div class="item-title">${escapeHtml(task.title)}</div>
@@ -1558,7 +1585,7 @@ function renderCompletedTasks(tasks) {
           <span class="badge">${escapeHtml(task.category || "待办")}</span>
         </div>
       </article>
-    `).join("");
+    `).join("") + listOverflowNotice("completedTasks", sortedTasks.length, "项");
 }
 
 function renderTimeSessions(exerciseSessions) {
@@ -1571,7 +1598,8 @@ function renderTimeSessions(exerciseSessions) {
     list.innerHTML = `<div class="empty">完成运动后，时间会自动记录在这里。</div>`;
     return;
   }
-  list.innerHTML = sessions.map((session) => `
+  const visibleSessions = visibleListItems("timeSessions", sessions);
+  list.innerHTML = visibleSessions.map((session) => `
     <article class="item">
       <div class="item-title">${escapeHtml(session.title || session.kind)} <span class="text-muted">${sessionMinutes(session)} 分钟</span></div>
       <div class="item-meta">
@@ -1579,7 +1607,7 @@ function renderTimeSessions(exerciseSessions) {
         <span class="badge">${session.kind}</span>
       </div>
     </article>
-  `).join("");
+  `).join("") + listOverflowNotice("timeSessions", sessions.length, "条");
 }
 
 function notesToText(start = "", end = "") {

@@ -852,6 +852,46 @@ label {
   box-shadow: var(--shadow-light);
 }
 
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chart-legend i {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.legend-exercise {
+  background: #9fc08d;
+}
+
+.legend-done {
+  background: #df8ea0;
+}
+
+.legend-habit {
+  background: #8fb2cc;
+}
+
+.chart-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 #statsTrendChart {
   display: block;
   width: 100%;
@@ -3415,6 +3455,20 @@ h1 {
   font-size: 0.86rem;
 }
 
+.list-overflow-note {
+  min-height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed rgba(122, 91, 80, 0.14);
+  border-radius: 12px;
+  background: rgba(255, 253, 248, 0.72);
+  color: #9c8179;
+  padding: 9px 10px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  text-align: center;
+}
+
 /* Mobile dashboard readability */
 .exercise-preview {
   grid-template-columns: 1fr;
@@ -3559,6 +3613,26 @@ button:disabled {
   gap: 12px;
 }
 
+#view-notes .notes-export #exportNotesButton {
+  margin-top: 6px;
+}
+
 #view-notes .item-title {
   white-space: pre-wrap;
+}
+
+/* Gentle color lift for the three stat cards. */
+.stats-grid .stat-card:nth-child(1) {
+  border-color: rgba(159, 192, 141, 0.28);
+  background: #f8fbf2;
+}
+
+.stats-grid .stat-card:nth-child(2) {
+  border-color: rgba(223, 142, 160, 0.24);
+  background: #fff6f8;
+}
+
+.stats-grid .stat-card:nth-child(3) {
+  border-color: rgba(143, 178, 204, 0.26);
+  background: #f5f9fc;
 }
