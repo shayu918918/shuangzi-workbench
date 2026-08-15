@@ -42,7 +42,8 @@ function createTimerState() {
     interval: null,
     startedAt: null,
     stepIndex: 0,
-    activeTotal: 0
+    activeTotal: 0,
+    activeElapsed: 0
   };
 }
 
@@ -66,6 +67,7 @@ function loadState() {
       rightSeconds: 40,
       restSeconds: 30,
       exerciseRounds: 3,
+      exerciseInfinite: false,
       hiddenHomeModules: []
     }
   };
@@ -660,6 +662,8 @@ function applySettings() {
   document.getElementById("rightSeconds").value = normalizeTimerSetting(state.settings?.rightSeconds, 40);
   document.getElementById("restSeconds").value = normalizeTimerSetting(state.settings?.restSeconds, 30);
   document.getElementById("exerciseRounds").value = normalizeTimerSetting(state.settings?.exerciseRounds, 3, 1, 20);
+  document.getElementById("exerciseInfinite").checked = Boolean(state.settings?.exerciseInfinite);
+  document.getElementById("exerciseRounds").disabled = Boolean(state.settings?.exerciseInfinite);
   document.getElementById("homeOrder").value = homeOrder;
   ["schedule", "tasks", "habits"].forEach((module) => {
     document.getElementById(`showHome${capitalize(module)}`).checked = !state.settings?.hiddenHomeModules?.includes(module);
@@ -700,6 +704,10 @@ function setupTimers() {
     playUiSound("toggle");
     pauseExercise();
   });
+  document.getElementById("exerciseFinish").addEventListener("click", () => {
+    playUiSound("save");
+    finishExerciseEarly();
+  });
   document.getElementById("exerciseReset").addEventListener("click", () => {
     playUiSound("delete");
     resetExercise();
@@ -709,6 +717,11 @@ function setupTimers() {
       saveExerciseTimerSettings();
       resetExercise();
     });
+  });
+  document.getElementById("exerciseInfinite").addEventListener("change", () => {
+    saveExerciseTimerSettings();
+    document.getElementById("exerciseRounds").disabled = document.getElementById("exerciseInfinite").checked;
+    resetExercise();
   });
   resetExercise();
 }
@@ -720,6 +733,7 @@ function saveExerciseTimerSettings() {
   state.settings.rightSeconds = normalizeTimerSetting(document.getElementById("rightSeconds").value, 40);
   state.settings.restSeconds = normalizeTimerSetting(document.getElementById("restSeconds").value, 30);
   state.settings.exerciseRounds = normalizeTimerSetting(document.getElementById("exerciseRounds").value, 3, 1, 20);
+  state.settings.exerciseInfinite = document.getElementById("exerciseInfinite").checked;
   saveState();
 }
 
@@ -835,9 +849,9 @@ function playExerciseCue(kind = "stage", tone = 740) {
       { frequency: 740, duration: 0.2, delay: 0.16, volume: 0.42, type: "square" }
     ],
     rest: [
-      { frequency: 392, duration: 0.28, delay: 0, volume: 0.68, type: "triangle" },
-      { frequency: 294, duration: 0.38, delay: 0.3, volume: 0.64, type: "triangle" },
-      { frequency: 220, duration: 0.52, delay: 0.72, volume: 0.56, type: "sine" }
+      { frequency: 523, duration: 0.18, delay: 0, volume: 0.76, type: "square" },
+      { frequency: 392, duration: 0.34, delay: 0.22, volume: 0.74, type: "triangle" },
+      { frequency: 262, duration: 0.58, delay: 0.64, volume: 0.68, type: "sine" }
     ],
     finish: [
       { frequency: 880, duration: 0.14, delay: 0, volume: 0.42, type: "triangle" },
@@ -847,7 +861,7 @@ function playExerciseCue(kind = "stage", tone = 740) {
     ]
   };
   const pattern = patterns[kind] || [{ frequency: tone, duration: 0.18, delay: 0 }];
-  const volumeScale = mode === "soft" ? 0.58 : 1;
+  const volumeScale = mode === "soft" ? (kind === "rest" ? 0.78 : 0.58) : 1;
   pattern.forEach(({ frequency, duration, delay, volume = 0.42, type = "triangle" }) => {
     beep(frequency, duration, volume * volumeScale, delay, type);
   });
@@ -871,21 +885,24 @@ function formatSeconds(seconds) {
 
 function buildExerciseSteps() {
   const rounds = Math.max(1, Number(document.getElementById("exerciseRounds").value || 1));
+  const infinite = document.getElementById("exerciseInfinite")?.checked;
   const steps = [{
     title: "准备",
     seconds: Math.max(1, Number(document.getElementById("warmupSeconds").value || 1)),
     cue: "warmup",
     active: false
   }];
-  for (let round = 1; round <= rounds; round += 1) {
-    [
+  const plannedRounds = infinite ? 1 : rounds;
+  for (let round = 1; round <= plannedRounds; round += 1) {
+    const roundSteps = [
       ["左边", "leftSeconds", "left", true],
       ["换边准备", "switchSeconds", "switch", false],
-      ["右边", "rightSeconds", "right", true],
-      ["休息", "restSeconds", "rest", false]
-    ].forEach(([title, inputId, cue, active]) => {
+      ["右边", "rightSeconds", "right", true]
+    ];
+    if (infinite || round < rounds) roundSteps.push(["休息", "restSeconds", "rest", false]);
+    roundSteps.forEach(([title, inputId, cue, active]) => {
       steps.push({
-        title: `${title} ${round}/${rounds}`,
+        title,
         seconds: Math.max(1, Number(document.getElementById(inputId).value || 1)),
         cue,
         active
@@ -916,29 +933,28 @@ async function startExercise() {
   exerciseTimer.startedAt ||= new Date().toISOString();
   playExerciseCue(exerciseSteps[exerciseTimer.stepIndex]?.cue || "warmup");
   exerciseTimer.interval = setInterval(() => {
+    const currentStep = exerciseSteps[exerciseTimer.stepIndex];
+    exerciseTimer.elapsed += 1;
+    if (currentStep?.active) exerciseTimer.activeElapsed += 1;
     exerciseTimer.remaining -= 1;
     document.getElementById("exerciseClock").textContent = formatSeconds(Math.max(0, exerciseTimer.remaining));
     if (exerciseTimer.remaining <= 0) {
       exerciseTimer.stepIndex += 1;
       if (exerciseTimer.stepIndex >= exerciseSteps.length) {
+        if (document.getElementById("exerciseInfinite")?.checked) {
+          exerciseTimer.stepIndex = 1;
+          const nextStep = exerciseSteps[exerciseTimer.stepIndex];
+          exerciseTimer.remaining = nextStep.seconds;
+          document.getElementById("exerciseStage").textContent = nextStep.title;
+          document.getElementById("exerciseClock").textContent = formatSeconds(nextStep.seconds);
+          playExerciseCue(nextStep.cue);
+          return;
+        }
         clearInterval(exerciseTimer.interval);
         exerciseTimer.running = false;
         releaseExerciseWakeLock();
         playExerciseCue("finish", 920);
-        state.exerciseSessions.unshift({
-          id: uid("exercise"),
-          title: "居家运动",
-          seconds: exerciseTimer.activeTotal,
-          totalSeconds: exerciseTimer.total,
-          minutes: Math.max(1, Math.round(exerciseTimer.activeTotal / 60)),
-          createdAt: new Date().toISOString()
-        });
-        const completedHabit = completeHabitByTitle(/运动|健身|跑|练/);
-        saveState();
-        renderHome();
-        renderHabits();
-        renderStats();
-        setTimerNote("exerciseTimerNote", completedHabit ? "已记录左右边运动时长，并自动完成今日运动打卡。" : "已记录左右边运动时长。");
+        saveExerciseSession(exerciseTimer.activeElapsed || exerciseTimer.activeTotal, exerciseTimer.elapsed || exerciseTimer.total, true);
         resetExercise();
         return;
       }
@@ -955,6 +971,40 @@ function pauseExercise() {
   clearInterval(exerciseTimer.interval);
   exerciseTimer.running = false;
   releaseExerciseWakeLock();
+}
+
+function finishExerciseEarly() {
+  clearInterval(exerciseTimer.interval);
+  exerciseTimer.running = false;
+  releaseExerciseWakeLock();
+  const seconds = exerciseTimer.activeElapsed || 0;
+  if (seconds <= 0) {
+    setTimerNote("exerciseTimerNote", "还没有完成左边或右边运动，暂不记录。");
+    return;
+  }
+  saveExerciseSession(seconds, exerciseTimer.elapsed || exerciseTimer.total, false);
+  playExerciseCue("finish", 920);
+  resetExercise();
+}
+
+function saveExerciseSession(seconds, totalSeconds, completed) {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  state.exerciseSessions.unshift({
+    id: uid("exercise"),
+    title: completed ? "居家运动" : "居家运动（未完成）",
+    seconds,
+    totalSeconds,
+    minutes,
+    completed,
+    createdAt: new Date().toISOString()
+  });
+  const completedHabit = completeHabitByTitle(/运动|健身|跑|练/);
+  saveState();
+  renderHome();
+  renderHabits();
+  renderStats();
+  const prefix = completed ? "已记录左右边运动时长" : "已记录本次已完成的左右边运动时长";
+  setTimerNote("exerciseTimerNote", completedHabit ? `${prefix}，并自动完成今日运动打卡。` : `${prefix}。`);
 }
 
 async function requestExerciseWakeLock() {

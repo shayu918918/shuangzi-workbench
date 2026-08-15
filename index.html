@@ -128,12 +128,16 @@
             <label>换边<input id="switchSeconds" type="number" min="1" max="300" value="10"></label>
             <label>右边<input id="rightSeconds" type="number" min="1" max="900" value="40"></label>
             <label>休息<input id="restSeconds" type="number" min="1" max="900" value="30"></label>
-            <label>循环<input id="exerciseRounds" type="number" min="1" max="20" value="3"></label>
+            <label class="exercise-rounds-control">
+              <span class="exercise-rounds-title">循环<input id="exerciseInfinite" type="checkbox" aria-label="无限循环"></span>
+              <input id="exerciseRounds" type="number" min="1" max="20" value="3">
+            </label>
           </div>
           <div class="timer-note" id="exerciseTimerNote" role="status" aria-live="polite"></div>
           <div class="button-row">
             <button class="primary-button" id="exerciseStart" type="button">开始</button>
             <button class="secondary-button" id="exercisePause" type="button">暂停</button>
+            <button class="secondary-button" id="exerciseFinish" type="button">结束并记录</button>
             <button class="secondary-button" id="exerciseReset" type="button">重置</button>
           </div>
         </div>
