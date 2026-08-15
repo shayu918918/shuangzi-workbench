@@ -129,7 +129,11 @@
             <label>右边<input id="rightSeconds" type="number" min="1" max="900" value="40"></label>
             <label>休息<input id="restSeconds" type="number" min="1" max="900" value="30"></label>
             <label class="exercise-rounds-control">
-              <span class="exercise-rounds-title">循环<input id="exerciseInfinite" type="checkbox" aria-label="无限循环"></span>
+              <span class="exercise-rounds-title">
+                循环
+                <input class="exercise-infinite-native" id="exerciseInfinite" type="checkbox" aria-label="无限循环">
+                <span class="exercise-infinite-box" aria-hidden="true"></span>
+              </span>
               <input id="exerciseRounds" type="number" min="1" max="20" value="3">
             </label>
           </div>
