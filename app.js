@@ -1,14 +1,17 @@
 const STORAGE_KEY = "personal-workbench-v2";
 const LEGACY_STORAGE_KEY = "personal-workbench-v1";
 const weekNames = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
-const arrayStateKeys = ["tasks", "notes", "schedule", "focusSessions", "exerciseSessions", "habits"];
+const scheduleDays = [1, 2, 3, 4, 5];
+const scheduleSlots = ["08:20", "10:20", "14:00", "16:00"];
+const arrayStateKeys = ["tasks", "notes", "schedule", "focusSessions", "exerciseSessions", "habits", "periods"];
 const habitAccentCycle = ["green", "blue", "peach", "purple", "sage", "rose", "berry"];
 const listLimits = {
   allTasks: 12,
   notes: 7,
   dailySummary: 14,
   completedTasks: 12,
-  timeSessions: 12
+  timeSessions: 12,
+  periods: 6
 };
 const defaultHabits = [
   { id: "habit-reading", title: "阅读", accent: "green", doneDates: [] },
@@ -32,6 +35,7 @@ let audioContext;
 let toastTimer;
 let deferredInstallPrompt;
 let wakeLock;
+let currentRecordPane = "notes";
 
 function createTimerState() {
   return {
@@ -55,6 +59,7 @@ function loadState() {
     focusSessions: [],
     exerciseSessions: [],
     habits: defaultHabits.map((habit) => ({ ...habit, doneDates: [] })),
+    periods: [],
     settings: {
       fontScale: "normal",
       soundMode: "strong",
@@ -220,6 +225,40 @@ function addDays(dateValue, days) {
   const date = new Date(`${dateValue}T00:00:00`);
   date.setDate(date.getDate() + days);
   return dateToISO(date);
+}
+
+function daysBetween(start, end) {
+  return Math.round((new Date(`${end}T00:00:00`) - new Date(`${start}T00:00:00`)) / 86400000);
+}
+
+function periodLength(period) {
+  if (!period?.start || !period?.end) return null;
+  return daysBetween(period.start, period.end) + 1;
+}
+
+function sortedPeriods(desc = true) {
+  const items = Array.isArray(state.periods) ? state.periods : [];
+  return items
+    .filter((period) => period?.start)
+    .slice()
+    .sort((a, b) => desc ? b.start.localeCompare(a.start) : a.start.localeCompare(b.start));
+}
+
+function averagePeriodLength(periods) {
+  const lengths = periods.map(periodLength).filter((value) => Number.isFinite(value) && value > 0);
+  if (!lengths.length) return null;
+  return Math.round(lengths.reduce((sum, value) => sum + value, 0) / lengths.length);
+}
+
+function averageCycleLength(periods) {
+  const asc = periods.slice().sort((a, b) => a.start.localeCompare(b.start));
+  const lengths = [];
+  for (let index = 1; index < asc.length; index += 1) {
+    const length = daysBetween(asc[index - 1].start, asc[index].start);
+    if (length > 0 && length < 80) lengths.push(length);
+  }
+  if (!lengths.length) return null;
+  return Math.round(lengths.reduce((sum, value) => sum + value, 0) / lengths.length);
 }
 
 function eachDate(start, end) {
@@ -441,6 +480,7 @@ function init() {
   setupTimers();
   setupPWA();
   renderAll();
+  setRecordPane(currentRecordPane);
   setView(viewFromHash());
   window.addEventListener("hashchange", () => setView(viewFromHash()));
 }
@@ -472,6 +512,12 @@ function setupNavigation() {
       activate();
     });
   });
+  document.querySelectorAll("[data-record-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      playUiSound("nav");
+      setRecordPane(button.dataset.recordTab);
+    });
+  });
 }
 
 function setView(view) {
@@ -483,6 +529,18 @@ function setView(view) {
 function viewFromHash() {
   const value = location.hash.replace("#", "");
   return value === "today" ? "home" : value || "home";
+}
+
+function setRecordPane(pane = "notes") {
+  currentRecordPane = pane === "periods" ? "periods" : "notes";
+  document.querySelectorAll("[data-record-tab]").forEach((button) => {
+    const active = button.dataset.recordTab === currentRecordPane;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  });
+  document.querySelectorAll("[data-record-pane]").forEach((panel) => {
+    panel.classList.toggle("active", panel.dataset.recordPane === currentRecordPane);
+  });
 }
 
 function jumpFromDashboard(target) {
@@ -541,6 +599,37 @@ function setupForms() {
     saveDailyNote(todayISO(), text);
     saveState();
     renderNotes();
+    playUiSound("save");
+  });
+
+  document.getElementById("periodForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const startInput = document.getElementById("periodStart");
+    const endInput = document.getElementById("periodEnd");
+    const start = startInput.value;
+    let end = endInput.value;
+    if (!start) {
+      playUiSound("error");
+      return;
+    }
+    if (end && end < start) end = start;
+    const existing = state.periods.find((period) => period.start === start);
+    if (existing) {
+      existing.end = end;
+      existing.updatedAt = new Date().toISOString();
+    } else {
+      state.periods.push({
+        id: uid("period"),
+        start,
+        end,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+    startInput.value = "";
+    endInput.value = "";
+    saveState();
+    renderPeriods();
     playUiSound("save");
   });
 
@@ -779,10 +868,11 @@ function beep(frequency = 740, duration = 0.16, volume = 0.28, delay = 0, type =
   const oscillator = audioContext.createOscillator();
   const gain = audioContext.createGain();
   const startAt = audioContext.currentTime + delay;
+  const safeVolume = Math.min(0.95, Math.max(0.0001, volume));
   oscillator.frequency.value = frequency;
   oscillator.type = type;
   gain.gain.setValueAtTime(0.0001, startAt);
-  gain.gain.exponentialRampToValueAtTime(volume, startAt + 0.02);
+  gain.gain.exponentialRampToValueAtTime(safeVolume, startAt + 0.02);
   gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
   oscillator.connect(gain).connect(audioContext.destination);
   oscillator.start(startAt);
@@ -861,7 +951,7 @@ function playExerciseCue(kind = "stage", tone = 740) {
     ]
   };
   const pattern = patterns[kind] || [{ frequency: tone, duration: 0.18, delay: 0 }];
-  const volumeScale = mode === "soft" ? (kind === "rest" ? 0.78 : 0.58) : 1;
+  const volumeScale = mode === "soft" ? (kind === "rest" ? 1.05 : 0.85) : 1.35;
   pattern.forEach(({ frequency, duration, delay, volume = 0.42, type = "triangle" }) => {
     beep(frequency, duration, volume * volumeScale, delay, type);
   });
@@ -1055,6 +1145,7 @@ function renderAll() {
   renderHome();
   renderHabits();
   renderNotes();
+  renderPeriods();
   renderSchedule();
   renderStats();
 }
@@ -1079,7 +1170,7 @@ function renderHome() {
   renderDashboardPreview(todayScheduleItems, sortedTodayTasks, doneCount, todayTasks.length);
 
   todayScheduleList.innerHTML = weekScheduleItems.length
-    ? weekScheduleItems.map((item) => renderWeekScheduleItem(item)).join("")
+    ? buildScheduleTable(weekScheduleItems, false)
     : `<div class="empty empty-compact">本周无课表</div>`;
 
   todayList.innerHTML = sortedTodayTasks.length
@@ -1199,6 +1290,72 @@ function getWeekScheduleItems() {
     });
 }
 
+function buildScheduleTable(items, interactive = true) {
+  const tableMap = new Map();
+  items.forEach((item) => {
+    if (!scheduleDays.includes(item.day) || !scheduleSlots.includes(item.time)) return;
+    const key = `${item.day}|${item.time}`;
+    if (!tableMap.has(key)) tableMap.set(key, []);
+    tableMap.get(key).push(item);
+  });
+  const renderEntry = (item) => (interactive
+    ? `<button class="schedule-entry" type="button" data-delete-schedule="${item.id}" aria-label="删除 ${escapeHtml(item.title)}"><span>${escapeHtml(item.title)}</span><span class="schedule-entry-x" aria-hidden="true">×</span></button>`
+    : `<div class="schedule-entry">${escapeHtml(item.title)}</div>`);
+  const desktopRows = scheduleSlots.map((slot) => `
+    <tr>
+      <th scope="row">${escapeHtml(slot)}</th>
+      ${scheduleDays.map((day) => {
+        const itemsAtSlot = tableMap.get(`${day}|${slot}`) || [];
+        return `
+          <td>
+            <div class="schedule-cell">
+              ${itemsAtSlot.length ? itemsAtSlot.map((item) => renderEntry(item)).join("") : `<span class="schedule-empty-slot">—</span>`}
+            </div>
+          </td>
+        `;
+      }).join("")}
+    </tr>
+  `).join("");
+  const mobileDays = scheduleDays.map((day) => `
+    <article class="schedule-day-card">
+      <div class="schedule-day-head">${weekNames[day]}</div>
+      <div class="schedule-day-slots">
+        ${scheduleSlots.map((slot) => {
+          const itemsAtSlot = tableMap.get(`${day}|${slot}`) || [];
+          return `
+            <div class="schedule-slot-row">
+              <time class="schedule-slot-time">${escapeHtml(slot)}</time>
+              <div class="schedule-slot-items">
+                ${itemsAtSlot.length ? itemsAtSlot.map((item) => renderEntry(item)).join("") : `<span class="schedule-empty-slot">—</span>`}
+              </div>
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </article>
+  `).join("");
+  return `
+    <div class="schedule-board-stack">
+      <div class="schedule-table-shell schedule-desktop-board">
+        <table class="schedule-table">
+          <thead>
+            <tr>
+              <th scope="col">时间</th>
+              ${scheduleDays.map((day) => `<th scope="col">${weekNames[day]}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${desktopRows}
+          </tbody>
+        </table>
+      </div>
+      <div class="schedule-mobile-board">
+        ${mobileDays}
+      </div>
+    </div>
+  `;
+}
+
 function getNextFocusText(scheduleItems, taskItems) {
   const now = new Date();
   const nowTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -1255,15 +1412,13 @@ function renderHabits() {
     const done = habit.doneDates.includes(today);
     return `
       <button class="habit-card ${done ? "done" : ""}" type="button" data-toggle-habit="${habit.id}" data-accent="${escapeHtml(habit.accent)}">
-        <span class="habit-orb" aria-hidden="true">${done ? "✓" : habitIcon(habit.title)}</span>
-        <span>${escapeHtml(habit.title)}</span>
+        <span class="habit-name">${escapeHtml(habit.title)}</span>
       </button>
     `;
   }).join("");
   manageList.innerHTML = state.habits.map((habit) => `
     <article class="item">
       <div class="item-row">
-        <div class="badge">${habitIcon(habit.title)}</div>
         <div class="item-main">
           <div class="item-title">${escapeHtml(habit.title)}</div>
           <div class="item-meta">
@@ -1280,27 +1435,6 @@ function renderHabits() {
   manageList.querySelectorAll("[data-delete-habit]").forEach((button) => {
     button.addEventListener("click", () => deleteHabit(button.dataset.deleteHabit));
   });
-}
-
-function habitIcon(title) {
-  if (/早睡|睡眠|晚安|睡觉/.test(title)) {
-    return `<svg class="habit-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M16.8 14.5A6.2 6.2 0 0 1 9.5 6.2a6.8 6.8 0 1 0 7.3 8.3Z"/><path d="M15.8 5.2h3l-3 3.4h3"/></svg>`;
-  }
-  if (/英语|英文|外语|单词|背词|English/i.test(title)) {
-    return `<svg class="habit-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 17.5V7.2h6.2"/><path d="M6.2 12h5.4"/><path d="M6.2 17.5h6.5"/><path d="M16 8.5v9"/><path d="M16 8.5h2.8a2.1 2.1 0 0 1 0 4.2H16"/><path d="M16 12.7h3.2a2.4 2.4 0 0 1 0 4.8H16"/></svg>`;
-  }
-  if (/自律|坚持|克制|规律/.test(title)) {
-    return `<svg class="habit-svg" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="7.2" r="2.1"/><path d="M8 12.2c1.2-1.2 2.5-1.8 4-1.8s2.8.6 4 1.8"/><path d="M9.2 13.2 6 17.4h4.8"/><path d="M14.8 13.2 18 17.4h-4.8"/><path d="M8.4 19.2h7.2"/><path d="M12 10.8v4.8"/></svg>`;
-  }
-  if (/读|阅读|书/.test(title)) {
-    return `<svg class="habit-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M4.5 5.5c2.2-.8 4.2-.5 6 .9v12.1c-1.8-1.3-3.8-1.6-6-.8V5.5Z"/><path d="M19.5 5.5c-2.2-.8-4.2-.5-6 .9v12.1c1.8-1.3 3.8-1.6 6-.8V5.5Z"/><path d="M10.5 6.4h3"/></svg>`;
-  }
-  if (/运动|健身|跑|练/.test(title)) {
-    return `<svg class="habit-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 10v4"/><path d="M6 8.5v7"/><path d="M8.5 12h7"/><path d="M18 8.5v7"/><path d="M20.5 10v4"/></svg>`;
-  }
-  if (/写|论文/.test(title)) return "✎";
-  if (/水|喝/.test(title)) return "◍";
-  return "•";
 }
 
 function accentText(accent) {
@@ -1461,6 +1595,61 @@ function editDailyNote(id) {
   playUiSound("save");
 }
 
+function renderPeriods() {
+  const list = document.getElementById("periodList");
+  if (!list) return;
+  const periods = sortedPeriods();
+  const latest = periods[0];
+  const count = document.getElementById("periodCount");
+  const status = document.getElementById("periodStatus");
+  const summary = document.getElementById("periodSummary");
+  if (count) count.textContent = `${periods.length} 次`;
+  if (status) {
+    status.textContent = latest
+      ? `${latest.start}${latest.end ? ` 至 ${latest.end}` : " 开始，尚未结束"}`
+      : "记录开始和结束日期。";
+  }
+  const averageCycle = averageCycleLength(periods);
+  const averageLength = averagePeriodLength(periods);
+  if (summary) {
+    summary.innerHTML = `
+      <div><span>平均周期</span><strong>${averageCycle ? `${averageCycle} 天` : "--"}</strong></div>
+      <div><span>平均经期</span><strong>${averageLength ? `${averageLength} 天` : "--"}</strong></div>
+    `;
+  }
+  if (!periods.length) {
+    list.innerHTML = `<div class="empty">还没有周期记录。</div>`;
+    return;
+  }
+  const visiblePeriods = visibleListItems("periods", periods);
+  list.innerHTML = visiblePeriods.map((period) => {
+    const length = periodLength(period);
+    const month = period.start.slice(0, 7).replace("-", ".");
+    return `
+      <article class="period-card">
+        <div>
+          <strong>${month}</strong>
+          <span>${period.start}${period.end ? ` - ${period.end}` : " 开始"}</span>
+        </div>
+        <div class="period-card-side">
+          <span>${length ? `${length} 天` : "进行中"}</span>
+          <button class="danger-link" type="button" data-delete-period="${period.id}">删除</button>
+        </div>
+      </article>
+    `;
+  }).join("") + listOverflowNotice("periods", periods.length, "次");
+  list.querySelectorAll("[data-delete-period]").forEach((button) => {
+    button.addEventListener("click", () => deletePeriod(button.dataset.deletePeriod));
+  });
+}
+
+function deletePeriod(id) {
+  state.periods = state.periods.filter((period) => period.id !== id);
+  saveState();
+  renderPeriods();
+  playUiSound("delete");
+}
+
 function renderSchedule() {
   const list = document.getElementById("scheduleList");
   document.getElementById("scheduleCount").textContent = `${state.schedule.length} 项`;
@@ -1468,19 +1657,28 @@ function renderSchedule() {
     list.innerHTML = `<div class="empty">还没有循环课表。</div>`;
     return;
   }
-  list.innerHTML = state.schedule
-    .slice()
-    .sort((a, b) => a.day - b.day || a.time.localeCompare(b.time))
-    .map((item) => `
-      <article class="item">
-        <div class="item-title">${escapeHtml(item.title)}</div>
-        <div class="item-meta">
-          <span>${weekNames[item.day]}</span>
-          <span>${escapeHtml(item.time)}</span>
-          <button class="danger-link" type="button" data-delete-schedule="${item.id}">删除</button>
+  const sorted = state.schedule.slice().sort((a, b) => ((a.day || 0) - (b.day || 0)) || (a.time || "").localeCompare(b.time || ""));
+  const extras = sorted.filter((item) => !scheduleDays.includes(item.day) || !scheduleSlots.includes(item.time));
+  const extrasBlock = extras.length
+    ? `
+      <details class="manage-block schedule-extra-block">
+        <summary>其他课表 <span>${extras.length} 项</span></summary>
+        <div class="list-stack">
+          ${extras.map((item) => `
+            <article class="item">
+              <div class="item-title">${escapeHtml(item.title)}</div>
+              <div class="item-meta">
+                <span>${weekNames[item.day] || "未定"}</span>
+                <span>${escapeHtml(item.time || "--:--")}</span>
+                <button class="danger-link" type="button" data-delete-schedule="${item.id}">删除</button>
+              </div>
+            </article>
+          `).join("")}
         </div>
-      </article>
-    `).join("");
+      </details>
+    `
+    : "";
+  list.innerHTML = `${buildScheduleTable(sorted, true)}${extrasBlock}`;
   list.querySelectorAll("[data-delete-schedule]").forEach((button) => {
     button.addEventListener("click", () => {
       state.schedule = state.schedule.filter((item) => item.id !== button.dataset.deleteSchedule);
@@ -1667,6 +1865,10 @@ function notesToText(start = "", end = "") {
   const notes = state.notes.filter((note) => {
     const date = noteDate(note);
     return date >= rangeStart && date <= rangeEnd;
+  }).sort((a, b) => {
+    const dateDiff = noteDate(a).localeCompare(noteDate(b));
+    if (dateDiff) return dateDiff;
+    return (a.updatedAt || a.createdAt || "").localeCompare(b.updatedAt || b.createdAt || "");
   });
   const lines = ["随手记录", `范围：${rangeStart}${rangeStart === rangeEnd ? "" : ` 至 ${rangeEnd}`}`, ""];
   if (!notes.length) {

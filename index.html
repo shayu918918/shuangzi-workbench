@@ -12,7 +12,6 @@
   <meta name="format-detection" content="telephone=no">
   <title>双子工作台</title>
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="icon" href="icon.svg" type="image/svg+xml">
   <link rel="icon" href="icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -59,7 +58,7 @@
             <h3>本周课表</h3>
             <span id="todayScheduleCount">0 节</span>
           </div>
-          <div class="schedule-stack" id="todayScheduleList"></div>
+          <div class="schedule-board" id="todayScheduleList"></div>
         </div>
 
         <div class="home-module" id="homeHabitsModule" data-home-module="habits">
@@ -96,15 +95,7 @@
         <details class="manage-block">
           <summary>管理打卡内容</summary>
           <form class="panel-form inner-form" id="habitForm">
-            <div class="inline-fields">
-              <input id="habitTitle" type="text" placeholder="例如：阅读、写作、运动、喝水">
-              <select id="habitAccent">
-                <option value="green">绿色</option>
-                <option value="blue">蓝色</option>
-                <option value="peach">橙色</option>
-                <option value="purple">紫色</option>
-              </select>
-            </div>
+            <input id="habitTitle" type="text" placeholder="例如：阅读、写作、运动、喝水">
             <button class="secondary-button" type="submit">添加打卡</button>
           </form>
           <div class="list-stack" id="habitManageList"></div>
@@ -163,10 +154,13 @@
               <option value="3">周三</option>
               <option value="4">周四</option>
               <option value="5">周五</option>
-              <option value="6">周六</option>
-              <option value="0">周日</option>
             </select>
-            <input id="scheduleTime" type="time" value="08:00">
+            <select id="scheduleTime">
+              <option value="08:20">08:20</option>
+              <option value="10:20">10:20</option>
+              <option value="14:00">14:00</option>
+              <option value="16:00">16:00</option>
+            </select>
           </div>
           <input id="scheduleTitle" type="text" placeholder="课程名称 / 教室">
           <button class="primary-button" type="submit">添加课程</button>
@@ -176,7 +170,7 @@
           <h3>全部课表</h3>
           <span id="scheduleCount">0 项</span>
         </div>
-        <div class="list-stack" id="scheduleList"></div>
+        <div class="schedule-board" id="scheduleList"></div>
       </section>
 
       <section class="section" id="view-stats" aria-labelledby="statsTitle">
@@ -261,34 +255,65 @@
           <div>
             <h2 id="notesTitle">随手记录</h2>
           </div>
-        </div>
-
-        <form class="panel-form note-form" id="noteForm">
-          <h3>今日便签</h3>
-          <textarea id="noteText" rows="8" placeholder="今天的碎片想法，可以随时回来补几句"></textarea>
-          <button class="primary-button" type="submit">保存今日便签</button>
-        </form>
-
-        <details class="panel-form settings-details notes-export" open>
-          <summary>导出记录</summary>
-          <div class="inline-fields">
-            <label>
-              开始
-              <input id="notesStart" type="date">
-            </label>
-            <label>
-              结束
-              <input id="notesEnd" type="date">
-            </label>
+          <div class="record-switch" role="tablist" aria-label="记录分类">
+            <button class="record-tab active" type="button" data-record-tab="notes" role="tab" aria-selected="true">便签</button>
+            <button class="record-tab" type="button" data-record-tab="periods" role="tab" aria-selected="false">周期</button>
           </div>
-          <button class="secondary-button" id="exportNotesButton" type="button">导出随手记录</button>
-        </details>
-
-        <div class="subhead">
-          <h3>过去便签</h3>
-          <span id="notesCount">0 张</span>
         </div>
-        <div class="list-stack" id="notesList"></div>
+
+        <div class="record-pane active" data-record-pane="notes">
+          <form class="panel-form note-form" id="noteForm">
+            <h3>今日便签</h3>
+            <textarea id="noteText" rows="8" placeholder="今天的碎片想法，可以随时回来补几句"></textarea>
+            <button class="primary-button" type="submit">保存今日便签</button>
+          </form>
+
+          <details class="panel-form settings-details notes-export">
+            <summary>导出记录</summary>
+            <div class="inline-fields">
+              <label>
+                开始
+                <input id="notesStart" type="date">
+              </label>
+              <label>
+                结束
+                <input id="notesEnd" type="date">
+              </label>
+            </div>
+            <button class="secondary-button" id="exportNotesButton" type="button">导出随手记录</button>
+          </details>
+
+          <div class="subhead">
+            <h3>过去便签</h3>
+            <span id="notesCount">0 张</span>
+          </div>
+          <div class="list-stack" id="notesList"></div>
+        </div>
+
+        <div class="record-pane" data-record-pane="periods">
+          <section class="panel-form period-panel" aria-labelledby="periodTitle">
+            <div class="period-head">
+              <div>
+                <h3 id="periodTitle">周期记录</h3>
+                <p id="periodStatus">记录开始和结束日期。</p>
+              </div>
+              <span id="periodCount">0 次</span>
+            </div>
+            <form class="period-form" id="periodForm">
+              <label>
+                开始
+                <input id="periodStart" type="date" required>
+              </label>
+              <label>
+                结束
+                <input id="periodEnd" type="date">
+              </label>
+              <button class="primary-button" type="submit">保存周期</button>
+            </form>
+            <div class="period-summary" id="periodSummary"></div>
+            <div class="period-months" id="periodList"></div>
+          </section>
+        </div>
       </section>
 
       <section class="section" id="view-settings" aria-labelledby="settingsTitle">

@@ -1,11 +1,10 @@
-const CACHE_NAME = "personal-workbench-v62";
+const CACHE_NAME = "personal-workbench-v85";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
   "./manifest.webmanifest",
-  "./icon.svg",
   "./icon-192.png",
   "./icon-512.png"
 ];
