@@ -1316,27 +1316,9 @@ function buildScheduleTable(items, interactive = true) {
       }).join("")}
     </tr>
   `).join("");
-  const mobileDays = scheduleDays.map((day) => `
-    <article class="schedule-day-card">
-      <div class="schedule-day-head">${weekNames[day]}</div>
-      <div class="schedule-day-slots">
-        ${scheduleSlots.map((slot) => {
-          const itemsAtSlot = tableMap.get(`${day}|${slot}`) || [];
-          return `
-            <div class="schedule-slot-row">
-              <time class="schedule-slot-time">${escapeHtml(slot)}</time>
-              <div class="schedule-slot-items">
-                ${itemsAtSlot.length ? itemsAtSlot.map((item) => renderEntry(item)).join("") : `<span class="schedule-empty-slot">—</span>`}
-              </div>
-            </div>
-          `;
-        }).join("")}
-      </div>
-    </article>
-  `).join("");
   return `
     <div class="schedule-board-stack">
-      <div class="schedule-table-shell schedule-desktop-board">
+      <div class="schedule-table-shell">
         <table class="schedule-table">
           <thead>
             <tr>
@@ -1348,9 +1330,6 @@ function buildScheduleTable(items, interactive = true) {
             ${desktopRows}
           </tbody>
         </table>
-      </div>
-      <div class="schedule-mobile-board">
-        ${mobileDays}
       </div>
     </div>
   `;

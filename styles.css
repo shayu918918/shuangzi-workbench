@@ -3318,29 +3318,35 @@ button:disabled {
 }
 
 .record-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px;
-  border: 1px solid rgba(188, 83, 106, 0.12);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 0;
+  width: min(220px, 100%);
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid rgba(223, 142, 160, 0.18);
   border-radius: 999px;
-  background: #fff7f9;
+  background: #fff2f5;
+  overflow: hidden;
 }
 
 .record-tab {
-  min-height: 34px;
-  padding: 0 14px;
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  padding: 0 10px;
   border: 0;
   border-radius: 999px;
-  background: transparent;
-  color: #8f7770;
+  background: #fff7f9;
+  color: #b27b86;
   font-size: 0.84rem;
   font-weight: 760;
   box-shadow: none;
 }
 
 .record-tab.active {
-  background: #bc536a;
+  background: #df8ea0;
   color: #fffdfd;
 }
 
@@ -3497,14 +3503,6 @@ button:disabled {
 .schedule-board-stack {
   display: grid;
   gap: 12px;
-}
-
-.schedule-desktop-board {
-  display: block;
-}
-
-.schedule-mobile-board {
-  display: none;
 }
 
 .schedule-table-shell {
@@ -3740,13 +3738,25 @@ button:disabled {
   box-shadow: 0 10px 24px rgba(223, 142, 160, 0.18);
 }
 @media (max-width: 760px) {
-  .schedule-desktop-board {
-    display: none;
+  .schedule-table th,
+  .schedule-table td {
+    padding: 5px 3px;
   }
 
-  .schedule-mobile-board {
-    display: grid;
-    gap: 10px;
+  .schedule-table thead th,
+  .schedule-table tbody th {
+    font-size: 0.68rem;
+  }
+
+  .schedule-entry {
+    min-height: 24px;
+    padding: 3px 5px;
+    font-size: 0.66rem;
+  }
+
+  .schedule-empty-slot {
+    min-height: 24px;
+    font-size: 0.66rem;
   }
 }
 
@@ -3760,6 +3770,6 @@ button:disabled {
   }
 
   .record-tab {
-    flex: 1 1 0;
+    min-width: 0;
   }
 }
